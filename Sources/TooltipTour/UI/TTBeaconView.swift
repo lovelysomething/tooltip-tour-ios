@@ -1,10 +1,14 @@
 import UIKit
 
-/// Numbered step indicator — a filled circle with the step number, matching the web app style.
+/// Numbered step indicator — filled circle with step number, matching the web app style.
 final class TTBeaconView: UIView {
 
-    var color: UIColor = UIColor(red: 0.098, green: 0.145, blue: 0.667, alpha: 1) {
+    var color: UIColor = .systemIndigo {
         didSet { circleLayer.backgroundColor = color.cgColor }
+    }
+
+    var labelColor: UIColor = .white {
+        didSet { label.textColor = labelColor }
     }
 
     var stepNumber: Int = 1 {
@@ -19,7 +23,7 @@ final class TTBeaconView: UIView {
         backgroundColor = .clear
         isUserInteractionEnabled = false
 
-        circleLayer.backgroundColor = UIColor(red: 0.098, green: 0.145, blue: 0.667, alpha: 1).cgColor
+        circleLayer.backgroundColor = UIColor.systemIndigo.cgColor
         circleLayer.shadowColor = UIColor.black.cgColor
         circleLayer.shadowOpacity = 0.25
         circleLayer.shadowRadius = 6

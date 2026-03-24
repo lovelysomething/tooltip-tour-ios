@@ -62,7 +62,8 @@ final class TTWalkthroughSession {
 
         let beacon = TTBeaconView(frame: .zero)
         beacon.isUserInteractionEnabled = false
-        beacon.color = config.styles?.resolvedPrimaryColor ?? UIColor(red: 0.098, green: 0.145, blue: 0.667, alpha: 1)
+        beacon.color      = config.styles?.resolvedBeaconBgColor   ?? .systemIndigo
+        beacon.labelColor = config.styles?.resolvedBeaconTextColor ?? .white
         root.view.addSubview(beacon)
         beaconView = beacon
     }
@@ -149,13 +150,12 @@ final class TTWalkthroughSession {
 
     private func updateCard(step: TTStep, index: Int) {
         guard let root = overlayWindow?.rootViewController else { return }
-        let primaryColor = Color(config.styles?.resolvedPrimaryColor ?? UIColor(red: 0.098, green: 0.145, blue: 0.667, alpha: 1))
 
         let card = TTStepCardView(
             step: step,
             stepIndex: index,
             totalSteps: config.steps.count,
-            primaryColor: primaryColor,
+            styles: config.styles,
             onNext: { [weak self] in
                 guard let self else { return }
                 self.showStep(self.currentStep + 1)
