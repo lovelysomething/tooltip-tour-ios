@@ -15,7 +15,7 @@ public struct TTLauncherView: View {
                             .transition(miniTabTransition(pos: pos))
                     } else {
                         launcher(config: config, pos: pos)
-                            .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: fabAnchor(pos: pos))))
+                            .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: fabAnchor(pos))))
                     }
                 }
                 .ignoresSafeArea()
