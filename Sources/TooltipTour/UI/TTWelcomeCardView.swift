@@ -20,7 +20,7 @@ struct TTWelcomeCardView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Emoji — append U+FE0F to force colour emoji presentation
                 if let emoji = config.welcomeEmoji, !emoji.isEmpty {
-                    Text(emoji + "\u{FE0F}")
+                    Text(emoji)
                         .font(.system(size: 32))
                         .padding(.bottom, 12)
                 }

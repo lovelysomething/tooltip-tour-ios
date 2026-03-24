@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 public struct TTLauncherView: View {
     @StateObject private var state = TTLauncherState()
@@ -24,18 +25,37 @@ public struct TTLauncherView: View {
         .onAppear { state.load() }
     }
 
-    // MARK: - Full launcher (FAB + X + optional welcome card)
+    // MARK: - Safe area helpers
+
+    private var topSafeArea: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first(where: { $0.activationState == .foregroundActive })?
+            .windows.first?.safeAreaInsets.top ?? 44
+    }
+
+    private var bottomSafeArea: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first(where: { $0.activationState == .foregroundActive })?
+            .windows.first?.safeAreaInsets.bottom ?? 0
+    }
+
+    // MARK: - Full launcher (FAB + X below + optional welcome card)
 
     @ViewBuilder
     private func launcher(config: TTConfig, pos: String) -> some View {
-        let isTop = pos.hasPrefix("top")
-        let isRight = pos.contains("right")
-        let fabBg = Color(config.styles?.resolvedFabBgColor ?? .systemIndigo)
+        let isTop    = pos.hasPrefix("top")
+        let isRight  = pos.contains("right")
+        let isCenter = pos.contains("center")
+        let fabBg    = Color(config.styles?.resolvedFabBgColor ?? .systemIndigo)
         let fabRadius = config.styles?.fabCornerRadius ?? 24
 
-        VStack(alignment: isRight ? .trailing : .leading, spacing: 12) {
+        let hAlignment: HorizontalAlignment = isRight ? .trailing : (isCenter ? .center : .leading)
+
+        VStack(alignment: hAlignment, spacing: 12) {
             if isTop {
-                fabRow(config: config, isRight: isRight, fabBg: fabBg, fabRadius: fabRadius)
+                fabStack(config: config, fabBg: fabBg, fabRadius: fabRadius)
                 if state.showWelcome {
                     TTWelcomeCardView(config: config,
                         onStart: { state.startGuide() },
@@ -51,25 +71,20 @@ public struct TTLauncherView: View {
                         onDontShowAgain: { state.dontShowAgain() })
                         .transition(.opacity)
                 }
-                fabRow(config: config, isRight: isRight, fabBg: fabBg, fabRadius: fabRadius)
+                fabStack(config: config, fabBg: fabBg, fabRadius: fabRadius)
             }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 32)
+        .padding(.top,    isTop ? topSafeArea + 8 : 32)
+        .padding(.bottom, isTop ? 32 : 32)
     }
 
+    /// FAB button with dismiss X stacked beneath it
     @ViewBuilder
-    private func fabRow(config: TTConfig, isRight: Bool, fabBg: Color, fabRadius: CGFloat) -> some View {
-        HStack(spacing: 10) {
-            if isRight {
-                // right-side: FAB first (inner), X outermost (closest to right edge)
-                fabBtn(config: config, fabBg: fabBg, fabRadius: fabRadius)
-                dismissBtn(fabBg: fabBg)
-            } else {
-                // left-side: X outermost (closest to left edge), FAB inner
-                dismissBtn(fabBg: fabBg)
-                fabBtn(config: config, fabBg: fabBg, fabRadius: fabRadius)
-            }
+    private func fabStack(config: TTConfig, fabBg: Color, fabRadius: CGFloat) -> some View {
+        VStack(spacing: 8) {
+            fabBtn(config: config, fabBg: fabBg, fabRadius: fabRadius)
+            dismissBtn(fabBg: fabBg)
         }
     }
 
@@ -179,14 +194,17 @@ public struct TTLauncherView: View {
     }
 
     private func miniTabPadding(pos: String) -> EdgeInsets {
-        let isTop = pos.hasPrefix("top")
-        let isRight = pos.contains("right")
-        let v: CGFloat = 48
-        let h: CGFloat = 0
-        if isTop && isRight  { return EdgeInsets(top: v, leading: 0,  bottom: 0, trailing: h) }
-        if isTop             { return EdgeInsets(top: v, leading: h,  bottom: 0, trailing: 0) }
-        if isRight           { return EdgeInsets(top: 0, leading: 0,  bottom: v, trailing: h) }
-        return EdgeInsets(top: 0, leading: h, bottom: v, trailing: 0)
+        let isTop    = pos.hasPrefix("top")
+        let isRight  = pos.contains("right")
+        let isCenter = pos.contains("center")
+        let topPad: CGFloat  = topSafeArea + 0   // flush under status bar
+        let sidePad: CGFloat = 48                 // left/right tabs: distance from bottom
+        let botPad: CGFloat  = bottomSafeArea     // bottom-center: above home indicator
+        if isTop && isRight  { return EdgeInsets(top: topPad, leading: 0, bottom: 0, trailing: 0) }
+        if isTop             { return EdgeInsets(top: topPad, leading: 0, bottom: 0, trailing: 0) }
+        if isRight           { return EdgeInsets(top: 0, leading: 0, bottom: sidePad, trailing: 0) }
+        if isCenter          { return EdgeInsets(top: 0, leading: 0, bottom: botPad,  trailing: 0) }
+        return                        EdgeInsets(top: 0, leading: 0, bottom: sidePad, trailing: 0)
     }
 
     // MARK: - Mini tab shape (partial rounded corners matching web CSS)
