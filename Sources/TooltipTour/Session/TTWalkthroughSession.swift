@@ -141,7 +141,8 @@ final class TTWalkthroughSession {
     private func updateSpotlight(frame: CGRect) {
         let animated = currentStep > 0
         let update = { [weak self] in
-            self?.spotlightView?.highlightRect = frame
+            guard let self else { return }
+            self.spotlightView?.highlightRect = frame
         }
         if animated {
             UIView.animate(withDuration: 0.3, animations: update)
