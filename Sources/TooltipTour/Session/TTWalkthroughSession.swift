@@ -92,7 +92,10 @@ final class TTWalkthroughSession {
             beacon.alpha        = i == 0 ? 1.0 : 0.5
 
             let stepIndex = i
-            beacon.onTap = { [weak self] in self?.showStep(stepIndex) }
+            beacon.onTap = { [weak self] in
+                guard let self else { return }
+                self.showStep(stepIndex)
+            }
 
             root.view.addSubview(beacon)
             beaconViews.append(beacon)
