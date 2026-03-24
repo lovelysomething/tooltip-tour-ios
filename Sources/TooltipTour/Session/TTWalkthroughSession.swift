@@ -62,8 +62,15 @@ final class TTWalkthroughSession {
 
         let beacon = TTBeaconView(frame: .zero)
         beacon.isUserInteractionEnabled = false
-        beacon.color      = config.styles?.resolvedBeaconBgColor   ?? .systemIndigo
-        beacon.labelColor = config.styles?.resolvedBeaconTextColor ?? .white
+        beacon.color        = config.styles?.resolvedBeaconBgColor   ?? .systemIndigo
+        beacon.labelColor   = config.styles?.resolvedBeaconTextColor ?? .white
+        beacon.beaconStyle  = {
+            switch config.styles?.beacon?.style {
+            case "dot":  return .dot
+            case "ring": return .ring
+            default:     return .numbered
+            }
+        }()
         root.view.addSubview(beacon)
         beaconView = beacon
     }
@@ -127,7 +134,7 @@ final class TTWalkthroughSession {
         let update = { [weak self] in
             self?.spotlightView?.highlightRect = frame
             if frame != .zero, let beacon = self?.beaconView {
-                let size: CGFloat = 36
+                let size: CGFloat = beacon.beaconStyle == .dot ? 14 : 36
                 // Position at top-right corner of the highlighted view
                 beacon.frame = CGRect(
                     x: frame.maxX - size / 2,

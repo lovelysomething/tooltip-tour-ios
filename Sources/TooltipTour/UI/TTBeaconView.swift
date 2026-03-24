@@ -1,10 +1,16 @@
 import UIKit
 
-/// Numbered step indicator — filled circle with step number, matching the web app style.
+/// Step beacon — supports 'numbered', 'dot', and 'ring' styles matching the dashboard editor.
 final class TTBeaconView: UIView {
 
+    enum Style { case numbered, dot, ring }
+
+    var beaconStyle: Style = .numbered {
+        didSet { applyStyle() }
+    }
+
     var color: UIColor = .systemIndigo {
-        didSet { circleLayer.backgroundColor = color.cgColor }
+        didSet { applyStyle() }
     }
 
     var labelColor: UIColor = .white {
@@ -23,11 +29,10 @@ final class TTBeaconView: UIView {
         backgroundColor = .clear
         isUserInteractionEnabled = false
 
-        circleLayer.backgroundColor = UIColor.systemIndigo.cgColor
         circleLayer.shadowColor = UIColor.black.cgColor
-        circleLayer.shadowOpacity = 0.25
-        circleLayer.shadowRadius = 6
-        circleLayer.shadowOffset = CGSize(width: 0, height: 3)
+        circleLayer.shadowOpacity = 0.2
+        circleLayer.shadowRadius = 5
+        circleLayer.shadowOffset = CGSize(width: 0, height: 2)
         layer.addSublayer(circleLayer)
 
         label.textColor = .white
@@ -41,6 +46,7 @@ final class TTBeaconView: UIView {
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
 
+        applyStyle()
         startPulse()
     }
 
@@ -52,10 +58,39 @@ final class TTBeaconView: UIView {
         circleLayer.cornerRadius = bounds.width / 2
     }
 
+    private func applyStyle() {
+        circleLayer.removeAllAnimations()
+
+        switch beaconStyle {
+        case .numbered:
+            circleLayer.backgroundColor = color.cgColor
+            circleLayer.borderColor = UIColor.clear.cgColor
+            circleLayer.borderWidth = 0
+            label.isHidden = false
+            label.textColor = labelColor
+
+        case .dot:
+            circleLayer.backgroundColor = color.cgColor
+            circleLayer.borderColor = UIColor.clear.cgColor
+            circleLayer.borderWidth = 0
+            label.isHidden = true
+
+        case .ring:
+            circleLayer.backgroundColor = UIColor.clear.cgColor
+            circleLayer.borderColor = color.cgColor
+            circleLayer.borderWidth = 3
+            // No shadow on ring
+            circleLayer.shadowOpacity = 0
+            label.isHidden = true
+        }
+
+        startPulse()
+    }
+
     private func startPulse() {
         let scale = CABasicAnimation(keyPath: "transform.scale")
         scale.fromValue = 1.0
-        scale.toValue   = 1.12
+        scale.toValue   = beaconStyle == .ring ? 1.15 : 1.10
         scale.duration  = 1.0
         scale.repeatCount = .infinity
         scale.autoreverses = true
