@@ -40,7 +40,7 @@ final class TTWalkthroughSession {
             .compactMap({ $0 as? UIWindowScene })
             .first(where: { $0.activationState == .foregroundActive }) else { return }
 
-        let window = UIWindow(windowScene: scene)
+        let window = TTOverlayWindow(windowScene: scene)
         window.windowLevel = .alert + 1
         window.backgroundColor = .clear
         window.isUserInteractionEnabled = true
@@ -100,7 +100,7 @@ final class TTWalkthroughSession {
         guard let appWindow = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .flatMap({ $0.windows })
-            .first(where: { !($0 is TTOverlayWindowMarker) }),
+            .first(where: { !($0 is TTOverlayWindow) }),
               let target = appWindow.findSubview(withIdentifier: identifier),
               let overlayWindow
         else { return .zero }
@@ -172,9 +172,8 @@ final class TTWalkthroughSession {
     }
 }
 
-// Marker protocol to distinguish the overlay window from app windows
-protocol TTOverlayWindowMarker {}
-extension UIWindow: TTOverlayWindowMarker {}
+/// Subclass used as the overlay window so we can exclude it when searching for app views.
+final class TTOverlayWindow: UIWindow {}
 
 // UIView helper to find subviews by accessibilityIdentifier
 extension UIView {
