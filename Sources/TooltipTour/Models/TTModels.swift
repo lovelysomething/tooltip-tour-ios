@@ -16,7 +16,7 @@ public struct TTConfig: Codable {
 
 public struct TTStep: Codable {
     public let title: String
-    public let text: String
+    public let content: String
     /// The UIView.accessibilityIdentifier to highlight for this step
     public let selector: String
 }

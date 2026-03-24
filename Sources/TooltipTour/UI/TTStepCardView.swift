@@ -33,7 +33,7 @@ struct TTStepCardView: View {
                 .foregroundColor(.primary)
                 .padding(.bottom, 4)
 
-            Text(step.text)
+            Text(step.content)
                 .font(.system(size: 14))
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
