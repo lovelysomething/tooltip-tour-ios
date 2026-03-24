@@ -1,22 +1,42 @@
 import UIKit
 
-/// Animated pulsing ring drawn around the highlighted view.
+/// Numbered step indicator — a filled circle with the step number, matching the web app style.
 final class TTBeaconView: UIView {
 
-    private let ringLayer = CALayer()
-    var color: UIColor = .white {
-        didSet { ringLayer.borderColor = color.cgColor }
+    var color: UIColor = UIColor(red: 0.098, green: 0.145, blue: 0.667, alpha: 1) {
+        didSet { circleLayer.backgroundColor = color.cgColor }
     }
+
+    var stepNumber: Int = 1 {
+        didSet { label.text = "\(stepNumber)" }
+    }
+
+    private let circleLayer = CALayer()
+    private let label = UILabel()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .clear
         isUserInteractionEnabled = false
 
-        ringLayer.borderWidth = 2.5
-        ringLayer.borderColor = UIColor.white.cgColor
-        ringLayer.opacity = 0.9
-        layer.addSublayer(ringLayer)
+        circleLayer.backgroundColor = UIColor(red: 0.098, green: 0.145, blue: 0.667, alpha: 1).cgColor
+        circleLayer.shadowColor = UIColor.black.cgColor
+        circleLayer.shadowOpacity = 0.25
+        circleLayer.shadowRadius = 6
+        circleLayer.shadowOffset = CGSize(width: 0, height: 3)
+        layer.addSublayer(circleLayer)
+
+        label.textColor = .white
+        label.font = .systemFont(ofSize: 15, weight: .bold)
+        label.textAlignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+
+        NSLayoutConstraint.activate([
+            label.centerXAnchor.constraint(equalTo: centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+
         startPulse()
     }
 
@@ -24,28 +44,18 @@ final class TTBeaconView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        ringLayer.frame = bounds
-        ringLayer.cornerRadius = layer.cornerRadius
+        circleLayer.frame = bounds
+        circleLayer.cornerRadius = bounds.width / 2
     }
 
     private func startPulse() {
         let scale = CABasicAnimation(keyPath: "transform.scale")
         scale.fromValue = 1.0
-        scale.toValue   = 1.35
-        scale.duration  = 1.1
+        scale.toValue   = 1.12
+        scale.duration  = 1.0
         scale.repeatCount = .infinity
         scale.autoreverses = true
         scale.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-
-        let fade = CABasicAnimation(keyPath: "opacity")
-        fade.fromValue = 0.9
-        fade.toValue   = 0.2
-        fade.duration  = 1.1
-        fade.repeatCount = .infinity
-        fade.autoreverses = true
-        fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-
-        ringLayer.add(scale, forKey: "pulse-scale")
-        ringLayer.add(fade,  forKey: "pulse-fade")
+        circleLayer.add(scale, forKey: "pulse")
     }
 }

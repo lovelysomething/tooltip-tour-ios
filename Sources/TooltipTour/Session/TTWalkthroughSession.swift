@@ -62,6 +62,7 @@ final class TTWalkthroughSession {
 
         let beacon = TTBeaconView(frame: .zero)
         beacon.isUserInteractionEnabled = false
+        beacon.color = config.styles?.resolvedPrimaryColor ?? UIColor(red: 0.098, green: 0.145, blue: 0.667, alpha: 1)
         root.view.addSubview(beacon)
         beaconView = beacon
     }
@@ -125,9 +126,15 @@ final class TTWalkthroughSession {
         let update = { [weak self] in
             self?.spotlightView?.highlightRect = frame
             if frame != .zero, let beacon = self?.beaconView {
-                let inset: CGFloat = -14
-                beacon.frame = frame.insetBy(dx: inset, dy: inset)
-                beacon.layer.cornerRadius = 22  // match spotlight rounded rect, not circle
+                let size: CGFloat = 36
+                // Position at top-right corner of the highlighted view
+                beacon.frame = CGRect(
+                    x: frame.maxX - size / 2,
+                    y: frame.minY - size / 2,
+                    width: size,
+                    height: size
+                )
+                beacon.stepNumber = (self?.currentStep ?? 0) + 1
             } else {
                 self?.beaconView?.frame = .zero
             }
