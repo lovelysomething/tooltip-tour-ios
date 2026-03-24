@@ -48,6 +48,7 @@ public final class TooltipTour {
         guard activeSession == nil else { return }
         guard let tracker else { return }
         let session = TTWalkthroughSession(config: config, siteKey: siteKey, tracker: tracker)
+        session.onEnd = { [weak self] in self?.activeSession = nil }
         activeSession = session
         session.start()
     }

@@ -9,6 +9,8 @@ final class TTWalkthroughSession {
     private let siteKey: String
     private let tracker: TTEventTracker
 
+    var onEnd: (() -> Void)?
+
     private var currentStep = 0
     private var overlayWindow: UIWindow?
     private var spotlightView: TTSpotlightView?
@@ -31,6 +33,7 @@ final class TTWalkthroughSession {
     func dismiss() {
         tracker.track(event: .guideDismissed, walkthroughId: config.id, siteKey: siteKey, stepIndex: currentStep)
         tearDown()
+        onEnd?()
     }
 
     // MARK: - Private
@@ -82,6 +85,7 @@ final class TTWalkthroughSession {
     private func complete() {
         tracker.track(event: .guideCompleted, walkthroughId: config.id, siteKey: siteKey)
         tearDown()
+        onEnd?()
     }
 
     private func tearDown() {
@@ -176,9 +180,21 @@ final class TTWalkthroughSession {
 final class TTOverlayWindow: UIWindow {}
 
 // UIView helper to find subviews by accessibilityIdentifier
+// Searches both UIView subviews and accessibilityElements (needed for SwiftUI-rendered views)
 extension UIView {
     func findSubview(withIdentifier id: String) -> UIView? {
         if accessibilityIdentifier == id { return self }
+
+        // SwiftUI sometimes puts identifiers on accessibilityElements rather than UIView subviews
+        if let elements = accessibilityElements {
+            for element in elements {
+                if let view = element as? UIView,
+                   let found = view.findSubview(withIdentifier: id) {
+                    return found
+                }
+            }
+        }
+
         for sub in subviews {
             if let found = sub.findSubview(withIdentifier: id) { return found }
         }
