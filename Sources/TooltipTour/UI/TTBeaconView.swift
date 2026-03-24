@@ -94,7 +94,8 @@ final class TTBeaconView: UIView {
         case .numbered:
             circleLayer.backgroundColor = color.cgColor
             circleLayer.borderWidth = 0
-            rippleLayer.isHidden = true
+            rippleLayer.backgroundColor = color.withAlphaComponent(0.35).cgColor
+            rippleLayer.isHidden = false
             label.isHidden = false
             label.textColor = labelColor
 
@@ -128,57 +129,21 @@ final class TTBeaconView: UIView {
     }
 
     private func startAnimation() {
-        switch beaconStyle {
-        case .numbered:
-            // Gentle scale pulse
-            let pulse = CABasicAnimation(keyPath: "transform.scale")
-            pulse.fromValue = 1.0
-            pulse.toValue = 1.08
-            pulse.duration = 1.1
-            pulse.repeatCount = .infinity
-            pulse.autoreverses = true
-            pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            circleLayer.add(pulse, forKey: "pulse")
+        // All styles use the same sonar-ping animation:
+        // the inner circle stays still, an outer ring expands and fades out
+        let scale = CABasicAnimation(keyPath: "transform.scale")
+        scale.fromValue = 1.0
+        scale.toValue = 2.4
 
-        case .dot:
-            // Outward ripple ring expanding from dot
-            let scale = CABasicAnimation(keyPath: "transform.scale")
-            scale.fromValue = 1.0
-            scale.toValue = 2.8
-            let opacity = CABasicAnimation(keyPath: "opacity")
-            opacity.fromValue = 0.5
-            opacity.toValue = 0.0
-            let group = CAAnimationGroup()
-            group.animations = [scale, opacity]
-            group.duration = 1.2
-            group.repeatCount = .infinity
-            group.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            rippleLayer.add(group, forKey: "ripple")
+        let opacity = CABasicAnimation(keyPath: "opacity")
+        opacity.fromValue = 0.55
+        opacity.toValue = 0.0
 
-        case .ring:
-            // Ring breathes in and out
-            let pulse = CABasicAnimation(keyPath: "transform.scale")
-            pulse.fromValue = 1.0
-            pulse.toValue = 1.18
-            pulse.duration = 1.0
-            pulse.repeatCount = .infinity
-            pulse.autoreverses = true
-            pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            circleLayer.add(pulse, forKey: "pulse")
-
-            // Fading outer ring
-            let fadeScale = CABasicAnimation(keyPath: "transform.scale")
-            fadeScale.fromValue = 1.0
-            fadeScale.toValue = 2.2
-            let fadeOpacity = CABasicAnimation(keyPath: "opacity")
-            fadeOpacity.fromValue = 0.4
-            fadeOpacity.toValue = 0.0
-            let group = CAAnimationGroup()
-            group.animations = [fadeScale, fadeOpacity]
-            group.duration = 1.2
-            group.repeatCount = .infinity
-            group.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            rippleLayer.add(group, forKey: "ripple")
-        }
+        let group = CAAnimationGroup()
+        group.animations = [scale, opacity]
+        group.duration = 1.4
+        group.repeatCount = .infinity
+        group.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        rippleLayer.add(group, forKey: "ripple")
     }
 }

@@ -78,9 +78,16 @@ final class TTWalkthroughSession {
             let frame = findTargetFrame(identifier: step.selector)
             guard frame != .zero else { continue }
 
+            let windowWidth = overlayWindow?.bounds.width ?? UIScreen.main.bounds.width
+            let windowHeight = overlayWindow?.bounds.height ?? UIScreen.main.bounds.height
+            let rawX = frame.maxX - beaconSize / 2
+            let rawY = frame.minY - beaconSize / 2
+            let clampedX = min(max(rawX, 4), windowWidth  - beaconSize - 4)
+            let clampedY = min(max(rawY, 4), windowHeight - beaconSize - 4)
+
             let beacon = TTBeaconView(frame: CGRect(
-                x: frame.maxX - beaconSize / 2,
-                y: frame.minY - beaconSize / 2,
+                x: clampedX,
+                y: clampedY,
                 width: beaconSize,
                 height: beaconSize
             ))
