@@ -101,6 +101,12 @@ final class TTWalkthroughSession {
     }
 
     private func findTargetFrame(identifier: String) -> CGRect {
+        // SwiftUI views registered via .ttTarget() — preferred path
+        if let frame = TTViewRegistry.shared.frame(for: identifier) {
+            return frame
+        }
+
+        // UIKit fallback: search view hierarchy directly
         guard let appWindow = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .flatMap({ $0.windows })
@@ -109,8 +115,7 @@ final class TTWalkthroughSession {
               let overlayWindow
         else { return .zero }
 
-        let frame = target.convert(target.bounds, to: overlayWindow)
-        return frame
+        return target.convert(target.bounds, to: overlayWindow)
     }
 
     private func updateSpotlight(frame: CGRect) {
