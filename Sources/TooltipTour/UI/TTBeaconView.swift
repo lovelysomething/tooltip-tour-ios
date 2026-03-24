@@ -1,6 +1,6 @@
 import UIKit
 
-/// Step beacon — supports 'numbered', 'dot', and 'ring' styles matching the dashboard editor.
+/// Step beacon — matches web embed.js exactly (numbered/dot/ring + sonar-ping animation).
 final class TTBeaconView: UIView {
 
     enum Style { case numbered, dot, ring }
@@ -8,7 +8,7 @@ final class TTBeaconView: UIView {
     // MARK: Configuration
 
     var beaconStyle: Style = .numbered {
-        didSet { applyStyle() }
+        didSet { applyStyle(); setNeedsLayout() }
     }
     var color: UIColor = .systemIndigo {
         didSet { applyStyle() }
@@ -19,45 +19,50 @@ final class TTBeaconView: UIView {
     var stepNumber: Int = 1 {
         didSet { label.text = "\(stepNumber)" }
     }
-    /// Highlights this beacon as the active step (full opacity + animation)
     var isActive: Bool = false {
         didSet { updateActiveState() }
     }
-    /// Called when the user taps this beacon
     var onTap: (() -> Void)?
 
-    // MARK: Size helpers
+    // MARK: Sizes — match web embed.js exactly
 
     static func size(for style: Style) -> CGFloat {
         switch style {
-        case .numbered: return 26
-        case .dot:      return 10
-        case .ring:     return 26
+        case .dot:      return 12
+        case .ring:     return 20
+        case .numbered: return 32
         }
     }
 
     // MARK: Private
 
     private let circleLayer = CALayer()
-    private let rippleLayer = CALayer()   // used by dot / ring for expanding ring animation
+    private let pulseLayer  = CALayer()   // border-only ring that sonar-pings
     private let label = UILabel()
+
+    // Pulse starts slightly outside the beacon: -4px for numbered, -6px for dot/ring
+    private var pulseInset: CGFloat { beaconStyle == .numbered ? -4 : -6 }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .clear
+        clipsToBounds = false               // allow pulse ring to extend beyond bounds
         isUserInteractionEnabled = true
 
-        // Ripple sits behind circle
-        layer.insertSublayer(rippleLayer, at: 0)
+        // Pulse ring (behind circle)
+        pulseLayer.backgroundColor = UIColor.clear.cgColor
+        pulseLayer.borderWidth = 2
+        layer.addSublayer(pulseLayer)
 
-        circleLayer.shadowColor = UIColor.black.cgColor
+        // Main circle
+        circleLayer.shadowColor  = UIColor.black.cgColor
         circleLayer.shadowOpacity = 0.2
-        circleLayer.shadowRadius = 4
-        circleLayer.shadowOffset = CGSize(width: 0, height: 2)
+        circleLayer.shadowRadius  = 4
+        circleLayer.shadowOffset  = CGSize(width: 0, height: 2)
         layer.addSublayer(circleLayer)
 
-        label.textColor = .white
-        label.font = .systemFont(ofSize: 12, weight: .bold)
+        label.textColor     = .white
+        label.font          = .systemFont(ofSize: 13, weight: .bold)
         label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
@@ -76,74 +81,76 @@ final class TTBeaconView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        circleLayer.frame = bounds
+        circleLayer.frame        = bounds
         circleLayer.cornerRadius = bounds.width / 2
-        rippleLayer.frame = bounds
-        rippleLayer.cornerRadius = bounds.width / 2
+
+        let pi = pulseInset
+        pulseLayer.frame        = bounds.insetBy(dx: pi, dy: pi)
+        pulseLayer.cornerRadius = pulseLayer.bounds.width / 2
     }
 
     @objc private func handleTap() { onTap?() }
 
-    // MARK: Style application
+    // MARK: Style
 
     private func applyStyle() {
+        pulseLayer.removeAllAnimations()
         circleLayer.removeAllAnimations()
-        rippleLayer.removeAllAnimations()
+
+        pulseLayer.borderColor = color.cgColor
 
         switch beaconStyle {
         case .numbered:
             circleLayer.backgroundColor = color.cgColor
-            circleLayer.borderWidth = 0
-            rippleLayer.backgroundColor = color.withAlphaComponent(0.35).cgColor
-            rippleLayer.isHidden = false
+            circleLayer.borderColor     = UIColor.clear.cgColor
+            circleLayer.borderWidth     = 0
             label.isHidden = false
             label.textColor = labelColor
 
         case .dot:
             circleLayer.backgroundColor = color.cgColor
-            circleLayer.borderWidth = 0
-            rippleLayer.backgroundColor = color.withAlphaComponent(0.35).cgColor
-            rippleLayer.isHidden = false
+            circleLayer.borderColor     = UIColor.clear.cgColor
+            circleLayer.borderWidth     = 0
             label.isHidden = true
 
         case .ring:
             circleLayer.backgroundColor = UIColor.clear.cgColor
-            circleLayer.borderColor = color.cgColor
-            circleLayer.borderWidth = 2.5
-            circleLayer.shadowOpacity = 0
-            rippleLayer.backgroundColor = color.withAlphaComponent(0.2).cgColor
-            rippleLayer.isHidden = false
+            circleLayer.borderColor     = color.cgColor
+            circleLayer.borderWidth     = 2
+            circleLayer.shadowOpacity   = 0
             label.isHidden = true
         }
 
-        if isActive { startAnimation() }
+        if isActive { startPulse() }
     }
 
     // MARK: Active state
 
     private func updateActiveState() {
-        circleLayer.removeAllAnimations()
-        rippleLayer.removeAllAnimations()
+        pulseLayer.removeAllAnimations()
         UIView.animate(withDuration: 0.2) { self.alpha = self.isActive ? 1.0 : 0.5 }
-        if isActive { startAnimation() }
+        if isActive { startPulse() }
     }
 
-    private func startAnimation() {
-        // All styles use the same sonar-ping animation:
-        // the inner circle stays still, an outer ring expands and fades out
-        let scale = CABasicAnimation(keyPath: "transform.scale")
-        scale.fromValue = 1.0
-        scale.toValue = 2.4
+    // MARK: Animation — matches @keyframes ls-pulse exactly
 
-        let opacity = CABasicAnimation(keyPath: "opacity")
-        opacity.fromValue = 0.55
-        opacity.toValue = 0.0
+    private func startPulse() {
+        // scale(1) → scale(1.7), opacity 0.6 → 0, 1.8s ease-out infinite
+        let scale        = CABasicAnimation(keyPath: "transform.scale")
+        scale.fromValue  = 1.0
+        scale.toValue    = 1.7
 
-        let group = CAAnimationGroup()
-        group.animations = [scale, opacity]
-        group.duration = 1.4
-        group.repeatCount = .infinity
-        group.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        rippleLayer.add(group, forKey: "ripple")
+        let opacity      = CABasicAnimation(keyPath: "opacity")
+        opacity.fromValue = 0.6
+        opacity.toValue   = 0.0
+
+        let group             = CAAnimationGroup()
+        group.animations      = [scale, opacity]
+        group.duration        = 1.8
+        group.repeatCount     = .infinity
+        group.timingFunction  = CAMediaTimingFunction(name: .easeOut)
+        group.fillMode        = .forwards
+
+        pulseLayer.add(group, forKey: "pulse")
     }
 }
