@@ -41,6 +41,7 @@ public struct TTLauncherView: View {
                         onStart: { state.startGuide() },
                         onClose: { state.closeWelcome() },
                         onDontShowAgain: { state.dontShowAgain() })
+                        .transition(.opacity)
                 }
             } else {
                 if state.showWelcome {
@@ -48,6 +49,7 @@ public struct TTLauncherView: View {
                         onStart: { state.startGuide() },
                         onClose: { state.closeWelcome() },
                         onDontShowAgain: { state.dontShowAgain() })
+                        .transition(.opacity)
                 }
                 fabRow(config: config, isRight: isRight, fabBg: fabBg, fabRadius: fabRadius)
             }
@@ -138,23 +140,23 @@ public struct TTLauncherView: View {
         if let icon, !icon.isEmpty {
             resolvedIcon(icon)
         } else {
-            Image(systemName: "questionmark.circle.fill")
-                .font(.system(size: 15, weight: .semibold))
+            Image(systemName: "questionmark.circle")
+                .font(.system(size: 15, weight: .medium))
         }
     }
 
     @ViewBuilder
     private func resolvedIcon(_ icon: String) -> some View {
         let sfMap: [String: String] = [
-            "question":  "questionmark.circle.fill",
-            "compass":   "safari.fill",
-            "map":       "map.fill",
-            "lightbulb": "lightbulb.fill",
+            "question":  "questionmark.circle",
+            "compass":   "safari",
+            "map":       "map",
+            "lightbulb": "lightbulb",
             "search":    "magnifyingglass",
-            "book":      "book.fill",
-            "rocket":    "paperplane.fill",
-            "chat":      "bubble.left.fill",
-            "info":      "info.circle.fill",
+            "book":      "book",
+            "rocket":    "paperplane",
+            "chat":      "bubble.left",
+            "info":      "info.circle",
         ]
         if let sf = sfMap[icon] {
             Image(systemName: sf).font(.system(size: 16, weight: .medium))

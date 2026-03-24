@@ -18,10 +18,10 @@ struct TTWelcomeCardView: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
             VStack(alignment: .leading, spacing: 0) {
-                // Emoji
+                // Emoji — append U+FE0F to force colour emoji presentation
                 if let emoji = config.welcomeEmoji, !emoji.isEmpty {
-                    Text(emoji)
-                        .font(.system(size: 36))
+                    Text(emoji + "\u{FE0F}")
+                        .font(.system(size: 32))
                         .padding(.bottom, 12)
                 }
 
