@@ -12,8 +12,10 @@ public struct TTLauncherView: View {
                     Color.clear
                     if state.isMinimised {
                         miniTab(config: config, pos: pos)
+                            .transition(miniTabTransition(pos: pos))
                     } else {
                         launcher(config: config, pos: pos)
+                            .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: fabAnchor(pos: pos))))
                     }
                 }
                 .ignoresSafeArea()
@@ -106,6 +108,7 @@ public struct TTLauncherView: View {
 
     private func miniTab(config: TTConfig, pos: String) -> some View {
         let fabBg = Color(config.styles?.resolvedFabBgColor ?? .systemIndigo)
+        let fabRadius = config.styles?.fabCornerRadius ?? 24
         return Button(action: { state.expandFab() }) {
             ZStack {
                 fabBg
@@ -113,7 +116,7 @@ public struct TTLauncherView: View {
                     .foregroundColor(.white)
             }
             .frame(width: 44, height: 44)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(miniTabShape(pos: pos, r: fabRadius))
             .shadow(color: fabBg.opacity(0.4), radius: 8, x: 0, y: 3)
         }
         .padding(miniTabPadding(pos: pos))
@@ -129,24 +132,29 @@ public struct TTLauncherView: View {
         }
     }
 
-    /// Icon for the mini tab — always shows something (falls back to questionmark)
+    /// Icon for the mini tab — always shows something (falls back to questionmark.circle.fill)
     @ViewBuilder
     private func miniIconView(icon: String?) -> some View {
         if let icon, !icon.isEmpty {
             resolvedIcon(icon)
         } else {
-            Image(systemName: "questionmark")
-                .font(.system(size: 16, weight: .semibold))
+            Image(systemName: "questionmark.circle.fill")
+                .font(.system(size: 15, weight: .semibold))
         }
     }
 
     @ViewBuilder
     private func resolvedIcon(_ icon: String) -> some View {
         let sfMap: [String: String] = [
-            "question": "questionmark.circle", "compass": "location.north.circle",
-            "map": "map", "lightbulb": "lightbulb", "search": "magnifyingglass",
-            "book": "book", "rocket": "paperplane.fill", "chat": "bubble.left.fill",
-            "info": "info.circle",
+            "question":  "questionmark.circle.fill",
+            "compass":   "safari.fill",
+            "map":       "map.fill",
+            "lightbulb": "lightbulb.fill",
+            "search":    "magnifyingglass",
+            "book":      "book.fill",
+            "rocket":    "paperplane.fill",
+            "chat":      "bubble.left.fill",
+            "info":      "info.circle.fill",
         ]
         if let sf = sfMap[icon] {
             Image(systemName: sf).font(.system(size: 16, weight: .medium))
@@ -177,6 +185,58 @@ public struct TTLauncherView: View {
         if isTop             { return EdgeInsets(top: v, leading: h,  bottom: 0, trailing: 0) }
         if isRight           { return EdgeInsets(top: 0, leading: 0,  bottom: v, trailing: h) }
         return EdgeInsets(top: 0, leading: h, bottom: v, trailing: 0)
+    }
+
+    // MARK: - Mini tab shape (partial rounded corners matching web CSS)
+
+    private func miniTabShape(pos: String, r: CGFloat) -> PartialRoundedRect {
+        let isLeft   = pos.contains("left")
+        let isRight  = pos.contains("right")
+        let isTop    = pos.hasPrefix("top")
+        if isLeft  { return PartialRoundedRect(tl: 0, tr: r, br: r, bl: 0) }
+        if isRight { return PartialRoundedRect(tl: r, tr: 0, br: 0, bl: r) }
+        if isTop   { return PartialRoundedRect(tl: 0, tr: 0, br: r, bl: r) }
+        return         PartialRoundedRect(tl: r, tr: r, br: 0, bl: 0)
+    }
+
+    // MARK: - Transition helpers
+
+    private func miniTabTransition(pos: String) -> AnyTransition {
+        if pos.contains("right") { return .move(edge: .trailing) }
+        if pos.hasPrefix("top")  { return .move(edge: .top) }
+        if pos.contains("bottom") && pos.contains("center") { return .move(edge: .bottom) }
+        return .move(edge: .leading)  // default bottom-left
+    }
+
+    private func fabAnchor(_ pos: String) -> UnitPoint {
+        switch pos {
+        case "bottom-right":  return .bottomTrailing
+        case "bottom-center": return .bottom
+        case "top-left":      return .topLeading
+        case "top-right":     return .topTrailing
+        case "top-center":    return .top
+        default:              return .bottomLeading
+        }
+    }
+}
+
+// MARK: - PartialRoundedRect Shape
+
+private struct PartialRoundedRect: Shape {
+    var tl: CGFloat; var tr: CGFloat; var br: CGFloat; var bl: CGFloat
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX + tl, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX - tr, y: rect.minY))
+        if tr > 0 { p.addArc(center: CGPoint(x: rect.maxX - tr, y: rect.minY + tr), radius: tr, startAngle: .degrees(-90), endAngle: .degrees(0), clockwise: false) }
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - br))
+        if br > 0 { p.addArc(center: CGPoint(x: rect.maxX - br, y: rect.maxY - br), radius: br, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false) }
+        p.addLine(to: CGPoint(x: rect.minX + bl, y: rect.maxY))
+        if bl > 0 { p.addArc(center: CGPoint(x: rect.minX + bl, y: rect.maxY - bl), radius: bl, startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false) }
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY + tl))
+        if tl > 0 { p.addArc(center: CGPoint(x: rect.minX + tl, y: rect.minY + tl), radius: tl, startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false) }
+        p.closeSubpath()
+        return p
     }
 }
 
