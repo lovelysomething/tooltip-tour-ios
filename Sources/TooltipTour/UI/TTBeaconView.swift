@@ -25,7 +25,7 @@ final class TTBeaconView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         ringLayer.frame = bounds
-        ringLayer.cornerRadius = bounds.width / 2
+        ringLayer.cornerRadius = layer.cornerRadius
     }
 
     private func startPulse() {

@@ -127,7 +127,7 @@ final class TTWalkthroughSession {
             if frame != .zero, let beacon = self?.beaconView {
                 let inset: CGFloat = -14
                 beacon.frame = frame.insetBy(dx: inset, dy: inset)
-                beacon.layer.cornerRadius = beacon.bounds.width / 2
+                beacon.layer.cornerRadius = 22  // match spotlight rounded rect, not circle
             } else {
                 self?.beaconView?.frame = .zero
             }
