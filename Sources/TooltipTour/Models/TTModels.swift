@@ -34,9 +34,13 @@ public struct TTStyles: Codable {
 public struct TTFabStyle: Codable {
     public let bgColor: String?
     public let borderRadius: Double?
+    public let icon: String?
+    public let position: String?
     enum CodingKeys: String, CodingKey {
         case bgColor = "bg_color"
         case borderRadius = "border_radius"
+        case icon
+        case position
     }
 }
 
