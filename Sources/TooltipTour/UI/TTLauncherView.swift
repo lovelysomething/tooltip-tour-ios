@@ -58,11 +58,13 @@ public struct TTLauncherView: View {
     private func fabRow(config: TTConfig, isRight: Bool, fabBg: Color, fabRadius: CGFloat) -> some View {
         HStack(spacing: 10) {
             if isRight {
-                dismissBtn(fabBg: fabBg)
+                // right-side: FAB first (inner), X outermost (closest to right edge)
                 fabBtn(config: config, fabBg: fabBg, fabRadius: fabRadius)
+                dismissBtn(fabBg: fabBg)
             } else {
-                fabBtn(config: config, fabBg: fabBg, fabRadius: fabRadius)
+                // left-side: X outermost (closest to left edge), FAB inner
                 dismissBtn(fabBg: fabBg)
+                fabBtn(config: config, fabBg: fabBg, fabRadius: fabRadius)
             }
         }
     }
@@ -105,32 +107,51 @@ public struct TTLauncherView: View {
     private func miniTab(config: TTConfig, pos: String) -> some View {
         let fabBg = Color(config.styles?.resolvedFabBgColor ?? .systemIndigo)
         return Button(action: { state.expandFab() }) {
-            iconView(icon: config.styles?.fab?.icon)
-                .foregroundColor(.white)
-                .frame(width: 44, height: 44)
-                .background(fabBg)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .shadow(color: fabBg.opacity(0.4), radius: 8, x: 0, y: 3)
+            ZStack {
+                fabBg
+                miniIconView(icon: config.styles?.fab?.icon)
+                    .foregroundColor(.white)
+            }
+            .frame(width: 44, height: 44)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(color: fabBg.opacity(0.4), radius: 8, x: 0, y: 3)
         }
         .padding(miniTabPadding(pos: pos))
     }
 
-    // MARK: - Icon
+    // MARK: - Icons
 
+    /// Icon for the full FAB button — no icon shows nothing (label-only)
     @ViewBuilder
     private func iconView(icon: String?) -> some View {
+        if let icon, !icon.isEmpty {
+            resolvedIcon(icon)
+        }
+    }
+
+    /// Icon for the mini tab — always shows something (falls back to questionmark)
+    @ViewBuilder
+    private func miniIconView(icon: String?) -> some View {
+        if let icon, !icon.isEmpty {
+            resolvedIcon(icon)
+        } else {
+            Image(systemName: "questionmark")
+                .font(.system(size: 16, weight: .semibold))
+        }
+    }
+
+    @ViewBuilder
+    private func resolvedIcon(_ icon: String) -> some View {
         let sfMap: [String: String] = [
             "question": "questionmark.circle", "compass": "location.north.circle",
             "map": "map", "lightbulb": "lightbulb", "search": "magnifyingglass",
             "book": "book", "rocket": "paperplane.fill", "chat": "bubble.left.fill",
             "info": "info.circle",
         ]
-        if let icon, !icon.isEmpty {
-            if let sf = sfMap[icon] {
-                Image(systemName: sf).font(.system(size: 16, weight: .medium))
-            } else {
-                Text(icon).font(.system(size: 16))
-            }
+        if let sf = sfMap[icon] {
+            Image(systemName: sf).font(.system(size: 16, weight: .medium))
+        } else {
+            Text(icon).font(.system(size: 16))
         }
     }
 
