@@ -25,6 +25,7 @@ public struct TTTarget: ViewModifier {
 
     public func body(content: Content) -> some View {
         content
+            .id(identifier)          // required for ScrollViewProxy.scrollTo(_:anchor:)
             .background(
                 GeometryReader { geo in
                     Color.clear
