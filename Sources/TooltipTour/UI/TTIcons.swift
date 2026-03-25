@@ -95,9 +95,17 @@ struct TTIconView: View {
 
     var body: some View {
         Canvas { context, canvasSize in
-            let path = icon.iconPath(in: CGRect(origin: .zero, size: canvasSize))
             // Scale stroke width proportionally from the SVG's 1.5pt @ 15pt icon
             let strokeWidth = 1.5 * (size / 15.0)
+            // Inset the draw rect by half the stroke width so the stroke
+            // never gets clipped at the canvas edge (which causes the "square" look)
+            let inset = strokeWidth / 2
+            let drawRect = CGRect(
+                x: inset, y: inset,
+                width: canvasSize.width  - strokeWidth,
+                height: canvasSize.height - strokeWidth
+            )
+            let path = icon.iconPath(in: drawRect)
             context.stroke(
                 path,
                 with: .color(color),

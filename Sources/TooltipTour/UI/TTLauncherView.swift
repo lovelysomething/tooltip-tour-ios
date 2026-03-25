@@ -44,7 +44,7 @@ public struct TTLauncherView: View {
             Button(action: { state.expandFab() }) {
                 ZStack {
                     Circle().fill(fabBg)
-                    TTIconView(icon: icon, color: .white, size: 15)
+                    TTIconView(icon: icon, color: .white, size: 18)
                 }
                 .frame(width: 44, height: 44)
             }
