@@ -160,7 +160,13 @@ final class TTInspector {
             return result
         }
 
-        // FALLBACK: UIKit view hierarchy (UILabel / UIButton text)
+        // FALLBACK: use accessibility label or visible text content as a suggested identifier
+        // so the developer knows what to call the view even without an explicit identifier set.
+        if let text = accessibilityText(at: screenPoint, in: appWindow), !text.isEmpty {
+            return (safe(text), text)
+        }
+
+        // Last resort: UIKit label/button text
         let localPoint = appWindow.convert(screenPoint, from: nil)
         let hitView = appWindow.hitTest(localPoint, with: nil)
         var view: UIView? = hitView
@@ -170,7 +176,7 @@ final class TTInspector {
             view = v.superview
         }
 
-        return ("unknown", "Unknown — add .accessibilityIdentifier() to this view")
+        return ("unknown", "Unknown")
     }
 
     /// Recursively search the UIAccessibility element tree for the smallest element
@@ -207,6 +213,32 @@ final class TTInspector {
             }
         }
 
+        return nil
+    }
+
+    /// Returns the accessibilityLabel of the most specific element at `point` that has one.
+    private func accessibilityText(at point: CGPoint, in element: NSObject) -> String? {
+        var children: [NSObject] = []
+        if let arr = element.accessibilityElements as? [NSObject] {
+            children = arr
+        } else if element.accessibilityElementCount() > 0 {
+            children = (0 ..< element.accessibilityElementCount())
+                .compactMap { element.accessibilityElement(at: $0) as? NSObject }
+        } else if let view = element as? UIView {
+            children = view.subviews.reversed()
+        }
+
+        for child in children {
+            let frame = child.accessibilityFrame
+            guard !frame.isEmpty, frame.contains(point) else { continue }
+            if let result = accessibilityText(at: point, in: child) { return result }
+        }
+
+        let frame = element.accessibilityFrame
+        if !frame.isEmpty, frame.contains(point),
+           let label = element.accessibilityLabel, !label.isEmpty {
+            return label
+        }
         return nil
     }
 
