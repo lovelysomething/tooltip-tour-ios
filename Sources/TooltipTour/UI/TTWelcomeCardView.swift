@@ -58,7 +58,6 @@ struct TTWelcomeCardView: View {
                     Text("Don't show again")
                         .font(.system(size: 14))
                         .foregroundColor(Color(UIColor(hex: "9ca3b0") ?? .tertiaryLabel))
-                        .underline()
                 }
             }
             .padding(.horizontal, 20)
