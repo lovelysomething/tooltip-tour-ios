@@ -191,14 +191,20 @@ final class TTWalkthroughSession {
             onDismiss: { [weak self] in self?.dismiss() }
         )
 
-        cardHostingController?.view.removeFromSuperview()
-        cardHostingController?.removeFromParent()
+        // Properly tear down old card before creating the new one
+        if let old = cardHostingController {
+            old.willMove(toParent: nil)
+            old.view.removeFromSuperview()
+            old.removeFromParent()
+            cardHostingController = nil
+        }
 
         let hc = UIHostingController(rootView: AnyView(card))
         hc.view.backgroundColor = .clear
         root.addChild(hc)
         root.view.addSubview(hc.view)
         hc.didMove(toParent: root)
+        cardHostingController = hc
 
         hc.view.translatesAutoresizingMaskIntoConstraints = false
 
