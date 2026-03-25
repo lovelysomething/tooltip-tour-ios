@@ -198,7 +198,8 @@ final class TTInspector {
         // Check this element itself
         let frame = element.accessibilityFrame
         if !frame.isEmpty, frame.contains(point),
-           let id = element.accessibilityIdentifier, !id.isEmpty {
+           let id = (element as? UIAccessibilityIdentification)?.accessibilityIdentifier,
+           !id.isEmpty {
             // Skip SwiftUI internal containers that may pick up the identifier accidentally
             let cls = String(describing: type(of: element))
             if !cls.contains("Platform") && !cls.contains("_UIHosting") {
