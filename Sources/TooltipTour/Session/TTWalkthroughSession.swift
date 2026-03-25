@@ -136,38 +136,32 @@ final class TTWalkthroughSession {
 
     // MARK: - Scroll to target
 
-    /// Scrolls the nearest ancestor UIScrollView so the target is visible,
-    /// then calls completion after the animation settles.
+    /// Scrolls the page to bring the target into view using SwiftUI's ScrollViewProxy
+    /// (via TTScrollBus), then calls completion after the animation settles.
+    /// Requires the ScrollView's content to have .ttScrollable() applied.
     private func scrollIntoViewIfNeeded(identifier: String, completion: @escaping () -> Void) {
-        guard
-            let appWindow = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .flatMap({ $0.windows })
-                .first(where: { !($0 is TTOverlayWindow) }),
-            let target = appWindow.findSubview(withIdentifier: identifier)
-        else {
-            print("[TT] scrollIntoView: target '\(identifier)' not found")
+        // Check if the target is already visible in the app window
+        let alreadyVisible: Bool = {
+            guard
+                let appWindow = UIApplication.shared.connectedScenes
+                    .compactMap({ $0 as? UIWindowScene })
+                    .flatMap({ $0.windows })
+                    .first(where: { !($0 is TTOverlayWindow) }),
+                let target = appWindow.findSubview(withIdentifier: identifier)
+            else { return false }
+            let frameInWindow = target.convert(target.bounds, to: appWindow)
+            return appWindow.safeAreaLayoutGuide.layoutFrame.intersects(frameInWindow)
+        }()
+
+        if alreadyVisible {
             completion()
             return
         }
 
-        // Walk up to find an ancestor UIScrollView — no contentSize check so we
-        // never skip the backing scroll view of a SwiftUI ScrollView.
-        var cursor: UIView? = target.superview
-        while let v = cursor {
-            if let sv = v as? UIScrollView {
-                let rectInContent = target.convert(target.bounds, to: sv)
-                let newY = max(-sv.adjustedContentInset.top, rectInContent.minY - 120)
-                print("[TT] scrollIntoView: scrolling '\(identifier)' — rect=\(rectInContent) newY=\(newY) current=\(sv.contentOffset.y)")
-                sv.setContentOffset(CGPoint(x: sv.contentOffset.x, y: newY), animated: true)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { completion() }
-                return
-            }
-            cursor = v.superview
-        }
-
-        print("[TT] scrollIntoView: no UIScrollView ancestor found for '\(identifier)'")
-        completion()
+        // Trigger SwiftUI-side scroll via the shared bus
+        TTScrollBus.shared.scrollTo(identifier)
+        // Wait for the scroll animation then re-measure
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { completion() }
     }
 
     // MARK: - Reposition beacon after scroll
