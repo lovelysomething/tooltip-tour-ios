@@ -14,7 +14,7 @@ final class TTWalkthroughSession {
     private var currentStep = 0
     private var overlayWindow: UIWindow?
     private var spotlightView: TTSpotlightView?
-    private var beaconViews: [TTBeaconView] = []
+    private var beacon: TTBeaconView?           // single beacon, repositioned per step
     private var cardHostingController: UIHostingController<AnyView>?
 
     init(config: TTConfig, siteKey: String, tracker: TTEventTracker) {
@@ -36,7 +36,7 @@ final class TTWalkthroughSession {
         onEnd?()
     }
 
-    // MARK: - Private
+    // MARK: - Setup
 
     private func setupOverlayWindow() {
         guard let scene = UIApplication.shared.connectedScenes
@@ -54,64 +54,33 @@ final class TTWalkthroughSession {
         window.makeKeyAndVisible()
         overlayWindow = window
 
-        // Spotlight (dark overlay with cutout) — non-interactive
+        // Spotlight
         let spotlight = TTSpotlightView(frame: window.bounds)
         spotlight.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         spotlight.isUserInteractionEnabled = false
         root.view.addSubview(spotlight)
         spotlightView = spotlight
 
-        // Resolve beacon style from config
-        let resolvedStyle: TTBeaconView.Style = {
+        // Single beacon — hidden until first step is ready
+        let style: TTBeaconView.Style = {
             switch config.styles?.beacon?.style {
             case "dot":  return .dot
             case "ring": return .ring
             default:     return .numbered
             }
         }()
-        let beaconBg    = config.styles?.resolvedBeaconBgColor   ?? .systemIndigo
-        let beaconText  = config.styles?.resolvedBeaconTextColor ?? .white
-        let beaconSize  = TTBeaconView.size(for: resolvedStyle)
-
-        // Create one beacon per step, all positioned immediately
-        for (i, step) in config.steps.enumerated() {
-            let frame = findTargetFrame(identifier: step.selector)
-            guard frame != .zero else { continue }
-
-            let windowWidth  = overlayWindow?.bounds.width  ?? UIScreen.main.bounds.width
-            let windowHeight = overlayWindow?.bounds.height ?? UIScreen.main.bounds.height
-
-            // Beacon: 15 pt inset from right edge of target, vertically centred on target
-            let beaconCenterX = frame.maxX - 15
-            let beaconCenterY = frame.midY
-            let rawX = beaconCenterX - beaconSize / 2
-            let rawY = beaconCenterY - beaconSize / 2
-            let clampedX = min(max(rawX, 4), windowWidth  - beaconSize - 4)
-            let clampedY = min(max(rawY, 4), windowHeight - beaconSize - 4)
-
-            let beacon = TTBeaconView(frame: CGRect(
-                x: clampedX,
-                y: clampedY,
-                width: beaconSize,
-                height: beaconSize
-            ))
-            beacon.beaconStyle  = resolvedStyle
-            beacon.color        = beaconBg
-            beacon.labelColor   = beaconText
-            beacon.stepNumber   = i + 1
-            beacon.isActive     = (i == 0)
-            beacon.alpha        = i == 0 ? 1.0 : 0.5
-
-            let stepIndex = i
-            beacon.onTap = { [weak self] in
-                guard let self else { return }
-                self.showStep(stepIndex)
-            }
-
-            root.view.addSubview(beacon)
-            beaconViews.append(beacon)
-        }
+        let size = TTBeaconView.size(for: style)
+        let b = TTBeaconView(frame: CGRect(x: 0, y: 0, width: size, height: size))
+        b.beaconStyle = style
+        b.color       = config.styles?.resolvedBeaconBgColor   ?? .systemIndigo
+        b.labelColor  = config.styles?.resolvedBeaconTextColor ?? .white
+        b.isActive    = true
+        b.alpha       = 0      // hidden until positioned
+        root.view.addSubview(b)
+        beacon = b
     }
+
+    // MARK: - Step progression
 
     private func showStep(_ index: Int) {
         guard index < config.steps.count else {
@@ -123,24 +92,20 @@ final class TTWalkthroughSession {
 
         tracker.track(event: .stepCompleted, walkthroughId: config.id, siteKey: siteKey, stepIndex: index)
 
-        // Scroll the target into view, then update UI with the fresh post-scroll frame
+        // 1. Scroll target into view (SwiftUI bus), then
+        // 2. Re-measure frame and place beacon + card at the correct position
         scrollIntoViewIfNeeded(identifier: step.selector) { [weak self] in
             guard let self else { return }
-            let targetFrame = self.findTargetFrame(identifier: step.selector)
-            self.repositionBeacon(at: index, targetFrame: targetFrame)
-            self.updateSpotlight(frame: targetFrame)
-            self.updateBeaconActive(index: index)
-            self.updateCard(step: step, index: index)
+            let frame = self.findTargetFrame(identifier: step.selector)
+            self.placeBeacon(stepNumber: index + 1, targetFrame: frame)
+            self.updateSpotlight(frame: frame)
+            self.updateCard(step: step, index: index, beaconFrame: self.beacon?.frame ?? .zero)
         }
     }
 
-    // MARK: - Scroll to target
+    // MARK: - Scroll
 
-    /// Scrolls the page to bring the target into view using SwiftUI's ScrollViewProxy
-    /// (via TTScrollBus), then calls completion after the animation settles.
-    /// Requires the ScrollView's content to have .ttScrollable() applied.
     private func scrollIntoViewIfNeeded(identifier: String, completion: @escaping () -> Void) {
-        // Check if the target is already visible in the app window
         let alreadyVisible: Bool = {
             guard
                 let appWindow = UIApplication.shared.connectedScenes
@@ -158,76 +123,47 @@ final class TTWalkthroughSession {
             return
         }
 
-        // Trigger SwiftUI-side scroll via the shared bus
         TTScrollBus.shared.scrollTo(identifier)
-        // Wait for the scroll animation then re-measure
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { completion() }
     }
 
-    // MARK: - Reposition beacon after scroll
+    // MARK: - Beacon
 
-    private func repositionBeacon(at index: Int, targetFrame: CGRect) {
-        guard index < beaconViews.count, targetFrame != .zero else { return }
+    /// Move the single beacon to sit on the target frame, updating its step number.
+    private func placeBeacon(stepNumber: Int, targetFrame: CGRect) {
+        guard let beacon, targetFrame != .zero else { return }
 
-        let windowWidth  = overlayWindow?.bounds.width  ?? UIScreen.main.bounds.width
-        let windowHeight = overlayWindow?.bounds.height ?? UIScreen.main.bounds.height
-        let beacon       = beaconViews[index]
-        let beaconSize   = TTBeaconView.size(for: beacon.beaconStyle)
+        let ww = overlayWindow?.bounds.width  ?? UIScreen.main.bounds.width
+        let wh = overlayWindow?.bounds.height ?? UIScreen.main.bounds.height
+        let sz = TTBeaconView.size(for: beacon.beaconStyle)
 
         let cx = targetFrame.maxX - 15
         let cy = targetFrame.midY
-        let x  = min(max(cx - beaconSize / 2, 4), windowWidth  - beaconSize - 4)
-        let y  = min(max(cy - beaconSize / 2, 4), windowHeight - beaconSize - 4)
+        let x  = min(max(cx - sz / 2, 4), ww - sz - 4)
+        let y  = min(max(cy - sz / 2, 4), wh - sz - 4)
+
+        beacon.stepNumber = stepNumber
 
         UIView.animate(withDuration: 0.25) {
-            beacon.frame = CGRect(x: x, y: y, width: beaconSize, height: beaconSize)
+            beacon.frame = CGRect(x: x, y: y, width: sz, height: sz)
+            beacon.alpha = 1
         }
-    }
-
-    private func complete() {
-        tracker.track(event: .guideCompleted, walkthroughId: config.id, siteKey: siteKey)
-        tearDown()
-        onEnd?()
-    }
-
-    private func tearDown() {
-        UIView.animate(withDuration: 0.2, animations: {
-            self.overlayWindow?.alpha = 0
-        }, completion: { _ in
-            self.overlayWindow?.isHidden = true
-            self.overlayWindow = nil
-            self.spotlightView = nil
-            self.beaconViews = []
-            self.cardHostingController = nil
-        })
     }
 
     // MARK: - Spotlight
 
     private func updateSpotlight(frame: CGRect) {
         let animated = currentStep > 0
-        let update = { [weak self] in
-            guard let self else { return }
-            self.spotlightView?.highlightRect = frame
-        }
         if animated {
-            UIView.animate(withDuration: 0.3, animations: update)
+            UIView.animate(withDuration: 0.3) { self.spotlightView?.highlightRect = frame }
         } else {
-            update()
-        }
-    }
-
-    // MARK: - Beacons
-
-    private func updateBeaconActive(index: Int) {
-        for (i, beacon) in beaconViews.enumerated() {
-            beacon.isActive = (i == index)
+            spotlightView?.highlightRect = frame
         }
     }
 
     // MARK: - Step card
 
-    private func updateCard(step: TTStep, index: Int) {
+    private func updateCard(step: TTStep, index: Int, beaconFrame: CGRect) {
         guard let root = overlayWindow?.rootViewController else { return }
 
         let card = TTStepCardView(
@@ -235,18 +171,11 @@ final class TTWalkthroughSession {
             stepIndex: index,
             totalSteps: config.steps.count,
             styles: config.styles,
-            onNext: { [weak self] in
-                guard let self else { return }
-                self.showStep(self.currentStep + 1)
-            },
-            onBack: { [weak self] in
-                guard let self else { return }
-                self.showStep(self.currentStep - 1)
-            },
+            onNext:    { [weak self] in self?.showStep((self?.currentStep ?? 0) + 1) },
+            onBack:    { [weak self] in self?.showStep((self?.currentStep ?? 0) - 1) },
             onDismiss: { [weak self] in self?.dismiss() }
         )
 
-        // Properly tear down old card before creating the new one
         if let old = cardHostingController {
             old.willMove(toParent: nil)
             old.view.removeFromSuperview()
@@ -263,20 +192,16 @@ final class TTWalkthroughSession {
 
         hc.view.translatesAutoresizingMaskIntoConstraints = false
 
-        // Position card 30 pt below the active beacon.
-        // If that would leave less than 180 pt to the screen bottom, flip above.
-        let windowHeight  = overlayWindow?.bounds.height ?? UIScreen.main.bounds.height
-        let beaconFrame   = index < beaconViews.count ? beaconViews[index].frame : .zero
-        let cardGap: CGFloat = 30
-        let cardTop       = beaconFrame.maxY + cardGap
-        let flipAbove     = cardTop + 200 > windowHeight - 40  // 200 = rough card height estimate
+        let windowHeight = overlayWindow?.bounds.height ?? UIScreen.main.bounds.height
+        let cardGap: CGFloat  = 30
+        let cardTop           = beaconFrame.maxY + cardGap
+        let flipAbove         = cardTop + 200 > windowHeight - 40
 
         var constraints: [NSLayoutConstraint] = [
-            hc.view.leadingAnchor.constraint(equalTo: root.view.leadingAnchor,  constant: 20),
+            hc.view.leadingAnchor.constraint(equalTo: root.view.leadingAnchor,   constant: 20),
             hc.view.trailingAnchor.constraint(equalTo: root.view.trailingAnchor, constant: -20),
         ]
         if flipAbove {
-            // Card bottom sits 30 pt above the beacon top
             constraints.append(
                 hc.view.bottomAnchor.constraint(equalTo: root.view.topAnchor,
                                                 constant: beaconFrame.minY - cardGap)
@@ -289,11 +214,29 @@ final class TTWalkthroughSession {
         NSLayoutConstraint.activate(constraints)
     }
 
+    // MARK: - Finish / teardown
+
+    private func complete() {
+        tracker.track(event: .guideCompleted, walkthroughId: config.id, siteKey: siteKey)
+        tearDown()
+        onEnd?()
+    }
+
+    private func tearDown() {
+        UIView.animate(withDuration: 0.2, animations: {
+            self.overlayWindow?.alpha = 0
+        }, completion: { _ in
+            self.overlayWindow?.isHidden = true
+            self.overlayWindow = nil
+            self.spotlightView = nil
+            self.beacon = nil
+            self.cardHostingController = nil
+        })
+    }
+
     // MARK: - View finding
 
     private func findTargetFrame(identifier: String) -> CGRect {
-        // Prefer live UIKit measurement — always reflects post-scroll position.
-        // Fall back to SwiftUI registry if the UIKit search comes up empty.
         if let appWindow = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .flatMap({ $0.windows })
@@ -306,8 +249,11 @@ final class TTWalkthroughSession {
     }
 }
 
-/// Subclass used as the overlay window so we can exclude it when searching for app views.
+// MARK: - TTOverlayWindow
+
 final class TTOverlayWindow: UIWindow {}
+
+// MARK: - UIView traversal
 
 extension UIView {
     func findSubview(withIdentifier id: String) -> UIView? {
