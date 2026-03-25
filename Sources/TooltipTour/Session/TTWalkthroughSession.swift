@@ -123,10 +123,81 @@ final class TTWalkthroughSession {
 
         tracker.track(event: .stepCompleted, walkthroughId: config.id, siteKey: siteKey, stepIndex: index)
 
-        let targetFrame = findTargetFrame(identifier: step.selector)
-        updateSpotlight(frame: targetFrame)
-        updateBeaconActive(index: index)
-        updateCard(step: step, index: index)
+        // Scroll the target into view, then update UI with the fresh post-scroll frame
+        scrollIntoViewIfNeeded(identifier: step.selector) { [weak self] in
+            guard let self else { return }
+            let targetFrame = self.findTargetFrame(identifier: step.selector)
+            self.repositionBeacon(at: index, targetFrame: targetFrame)
+            self.updateSpotlight(frame: targetFrame)
+            self.updateBeaconActive(index: index)
+            self.updateCard(step: step, index: index)
+        }
+    }
+
+    // MARK: - Scroll to target
+
+    /// Walks up the view hierarchy from the target to find a UIScrollView.
+    /// If found and the target isn't fully visible, scrolls it in with animation
+    /// and calls completion after the animation (≈0.4 s). Otherwise calls immediately.
+    private func scrollIntoViewIfNeeded(identifier: String, completion: @escaping () -> Void) {
+        guard
+            let appWindow = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .flatMap({ $0.windows })
+                .first(where: { !($0 is TTOverlayWindow) }),
+            let target = appWindow.findSubview(withIdentifier: identifier)
+        else { completion(); return }
+
+        // Walk up to the nearest ancestor UIScrollView
+        var scrollView: UIScrollView?
+        var cursor: UIView? = target.superview
+        while let v = cursor {
+            if let sv = v as? UIScrollView { scrollView = sv; break }
+            cursor = v.superview
+        }
+
+        guard let sv = scrollView else { completion(); return }
+
+        let rectInScrollView = target.convert(target.bounds, to: sv)
+        let visibleRect = CGRect(
+            x: sv.contentOffset.x,
+            y: sv.contentOffset.y,
+            width:  sv.bounds.width,
+            height: sv.bounds.height - sv.adjustedContentInset.bottom
+        )
+
+        guard !visibleRect.contains(rectInScrollView) else {
+            // Already fully visible — no scroll needed
+            completion()
+            return
+        }
+
+        // Add generous padding so the element isn't flush against the edge
+        let padded = rectInScrollView.insetBy(dx: -24, dy: -100)
+        sv.scrollRectToVisible(padded, animated: true)
+
+        // Wait for the default UIScrollView animation (0.3 s) + a small buffer
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) { completion() }
+    }
+
+    // MARK: - Reposition beacon after scroll
+
+    private func repositionBeacon(at index: Int, targetFrame: CGRect) {
+        guard index < beaconViews.count, targetFrame != .zero else { return }
+
+        let windowWidth  = overlayWindow?.bounds.width  ?? UIScreen.main.bounds.width
+        let windowHeight = overlayWindow?.bounds.height ?? UIScreen.main.bounds.height
+        let beacon       = beaconViews[index]
+        let beaconSize   = TTBeaconView.size(for: beacon.beaconStyle)
+
+        let cx = targetFrame.maxX - 15
+        let cy = targetFrame.midY
+        let x  = min(max(cx - beaconSize / 2, 4), windowWidth  - beaconSize - 4)
+        let y  = min(max(cy - beaconSize / 2, 4), windowHeight - beaconSize - 4)
+
+        UIView.animate(withDuration: 0.25) {
+            beacon.frame = CGRect(x: x, y: y, width: beaconSize, height: beaconSize)
+        }
     }
 
     private func complete() {
@@ -237,17 +308,17 @@ final class TTWalkthroughSession {
     // MARK: - View finding
 
     private func findTargetFrame(identifier: String) -> CGRect {
-        if let frame = TTViewRegistry.shared.frame(for: identifier) {
-            return frame
-        }
-        guard let appWindow = UIApplication.shared.connectedScenes
+        // Prefer live UIKit measurement — always reflects post-scroll position.
+        // Fall back to SwiftUI registry if the UIKit search comes up empty.
+        if let appWindow = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .flatMap({ $0.windows })
             .first(where: { !($0 is TTOverlayWindow) }),
-              let target = appWindow.findSubview(withIdentifier: identifier),
-              let overlayWindow
-        else { return .zero }
-        return target.convert(target.bounds, to: overlayWindow)
+           let target = appWindow.findSubview(withIdentifier: identifier),
+           let overlayWindow {
+            return target.convert(target.bounds, to: overlayWindow)
+        }
+        return TTViewRegistry.shared.frame(for: identifier) ?? .zero
     }
 }
 
