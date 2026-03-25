@@ -52,9 +52,8 @@ final class TTInspector {
         let overlay = TTInspectorOverlayView(
             state: state,
             onRetry:  { [weak self] in self?.retryCapture() },
-            onAccept: { [weak self] in
-                guard let self, let cap = self.state.captured else { return }
-                self.submitCapture(identifier: cap.identifier, displayName: cap.displayName)
+            onAccept: { [weak self] finalIdentifier in
+                self?.submitCapture(identifier: finalIdentifier, displayName: finalIdentifier)
             }
         )
         let hc = UIHostingController(rootView: AnyView(overlay))
@@ -129,7 +128,7 @@ final class TTInspector {
         let (identifier, displayName) = identifyView(at: screenPoint)
 
         // Show confirm card — enable SwiftUI layer for button interaction
-        state.captured = TTCapturedElement(identifier: identifier, displayName: displayName)
+        state.captured = TTCapturedElement(identifier: identifier, displayName: displayName, isConfirmed: false)
         state.phase = .confirming
         tapView?.isUserInteractionEnabled = false
         tapView?.backgroundColor = .clear
@@ -280,7 +279,7 @@ final class TTInspector {
 
 enum TTInspectorPhase { case tapping, confirming, done }
 
-struct TTCapturedElement { let identifier: String; let displayName: String }
+struct TTCapturedElement { let identifier: String; let displayName: String; let isConfirmed: Bool }
 
 @MainActor
 final class TTInspectorState: ObservableObject {
@@ -300,20 +299,19 @@ final class TTTapInterceptorView: UIView {
     }
 }
 
-// MARK: - SwiftUI confirm card overlay (shown only during confirming/done)
+// MARK: - SwiftUI confirm card overlay
 
 struct TTInspectorOverlayView: View {
     @ObservedObject var state: TTInspectorState
     let onRetry: () -> Void
-    let onAccept: () -> Void
+    let onAccept: (String) -> Void   // passes the final (possibly edited) identifier
 
     var body: some View {
         ZStack(alignment: .bottom) {
             Color.clear
             if (state.phase == .confirming || state.phase == .done), let cap = state.captured {
                 TTConfirmCard(
-                    displayName: cap.displayName,
-                    identifier: cap.identifier,
+                    suggestedIdentifier: cap.identifier == "unknown" ? "" : cap.identifier,
                     isDone: state.phase == .done,
                     onRetry: onRetry,
                     onAccept: onAccept
@@ -328,21 +326,24 @@ struct TTInspectorOverlayView: View {
 }
 
 struct TTConfirmCard: View {
-    let displayName: String
-    let identifier: String
+    let suggestedIdentifier: String
     let isDone: Bool
     let onRetry: () -> Void
-    let onAccept: () -> Void
+    let onAccept: (String) -> Void
+
+    @State private var identifier: String = ""
+    @FocusState private var fieldFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Header
             VStack(alignment: .leading, spacing: 4) {
-                Text(isDone ? "Sent to dashboard ✓" : "Captured")
+                Text(isDone ? "Sent to dashboard ✓" : "Set identifier")
                     .font(.system(size: 11, weight: .bold))
                     .tracking(1.5)
                     .textCase(.uppercase)
                     .foregroundColor(Color(red: 0.098, green: 0.145, blue: 0.667).opacity(0.65))
-                Text(displayName)
+                Text(isDone ? identifier : "Name this element")
                     .font(.system(size: 20, weight: .heavy))
                     .foregroundColor(Color(red: 0.051, green: 0.039, blue: 0.11))
                     .lineLimit(1)
@@ -350,15 +351,27 @@ struct TTConfirmCard: View {
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text(identifier)
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .foregroundColor(Color(red: 0.098, green: 0.145, blue: 0.667))
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(red: 0.098, green: 0.145, blue: 0.667).opacity(0.06))
+            // Editable identifier field
+            if !isDone {
+                TextField("e.g. loginButton or welcomeTitle", text: $identifier)
+                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .foregroundColor(Color(red: 0.098, green: 0.145, blue: 0.667))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(Color(red: 0.098, green: 0.145, blue: 0.667).opacity(0.06))
+                    .focused($fieldFocused)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .onSubmit { if !identifier.isEmpty { onAccept(identifier) } }
+            } else {
+                Text(identifier)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundColor(Color(red: 0.098, green: 0.145, blue: 0.667))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(red: 0.098, green: 0.145, blue: 0.667).opacity(0.06))
+            }
 
             if !isDone {
                 HStack(spacing: 0) {
@@ -371,7 +384,9 @@ struct TTConfirmCard: View {
                             .padding(.vertical, 16)
                             .foregroundColor(Color(red: 0.051, green: 0.039, blue: 0.11).opacity(0.4))
                     }
-                    Button(action: onAccept) {
+                    Button {
+                        if !identifier.isEmpty { onAccept(identifier) }
+                    } label: {
                         Text("Use this →")
                             .font(.system(size: 11, weight: .bold))
                             .tracking(1.5)
@@ -379,13 +394,20 @@ struct TTConfirmCard: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                             .foregroundColor(.white)
-                            .background(Color(red: 0.098, green: 0.145, blue: 0.667))
+                            .background(identifier.isEmpty
+                                ? Color(red: 0.098, green: 0.145, blue: 0.667).opacity(0.4)
+                                : Color(red: 0.098, green: 0.145, blue: 0.667))
                     }
+                    .disabled(identifier.isEmpty)
                 }
             }
         }
         .background(Color.white)
         .cornerRadius(14)
         .shadow(color: .black.opacity(0.18), radius: 24, x: 0, y: 8)
+        .onAppear {
+            identifier = suggestedIdentifier
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { fieldFocused = true }
+        }
     }
 }
