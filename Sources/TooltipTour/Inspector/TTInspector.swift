@@ -147,6 +147,13 @@ final class TTInspector {
     // MARK: - Element identification
 
     private func identifyView(at screenPoint: CGPoint) -> (identifier: String, displayName: String) {
+        // PRIMARY: check TTViewRegistry — all .ttTarget() views are registered here with
+        // accurate global frames, so this always wins over UIKit hierarchy traversal.
+        if let id = TTViewRegistry.shared.identifier(at: screenPoint) {
+            return (id, id)
+        }
+
+        // FALLBACK: UIKit accessibility traversal for views without .ttTarget()
         guard let appWindow = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .flatMap({ $0.windows })
@@ -156,43 +163,15 @@ final class TTInspector {
         let localPoint = appWindow.convert(screenPoint, from: nil)
         let hitView = appWindow.hitTest(localPoint, with: nil)
 
-        // Walk UP the hierarchy — SwiftUI sets accessibilityIdentifier on internal
-        // container views (PlatformGroupContainer etc.), so keep going up until we
-        // find a meaningful identifier, label, or text content.
         var view: UIView? = hitView
         while let v = view {
             let cls = String(describing: type(of: v))
-            let isInternalContainer = cls.contains("Platform") || cls.contains("Hosting") || cls.contains("_UI")
-
-            if let id = v.accessibilityIdentifier, !id.isEmpty, !isInternalContainer {
-                return (id, id)
-            }
-            // Accept accessibilityIdentifier even on containers as last resort
-            if let id = v.accessibilityIdentifier, !id.isEmpty {
-                return (id, id)
-            }
-            if let lbl = v.accessibilityLabel, !lbl.isEmpty, !isInternalContainer {
-                let safe = safe(lbl)
-                return (safe, lbl)
-            }
-            if let l = v as? UILabel, let t = l.text, !t.isEmpty {
-                return (safe(t), t)
-            }
-            if let b = v as? UIButton, let t = b.title(for: .normal), !t.isEmpty {
-                return (safe(t), t)
-            }
+            let isInternal = cls.contains("Platform") || cls.contains("Hosting") || cls.contains("_UI")
+            if let id = v.accessibilityIdentifier, !id.isEmpty, !isInternal { return (id, id) }
+            if let lbl = v.accessibilityLabel, !lbl.isEmpty, !isInternal { return (safe(lbl), lbl) }
+            if let l = v as? UILabel, let t = l.text, !t.isEmpty { return (safe(t), t) }
+            if let b = v as? UIButton, let t = b.title(for: .normal), !t.isEmpty { return (safe(t), t) }
             view = v.superview
-        }
-
-        // Fallback: first sibling or parent with a real identifier
-        var search: UIView? = hitView?.superview
-        while let v = search {
-            for sub in v.subviews {
-                if let id = sub.accessibilityIdentifier, !id.isEmpty {
-                    return (id, id)
-                }
-            }
-            search = v.superview
         }
 
         let cls = String(describing: type(of: hitView as AnyObject))

@@ -17,6 +17,15 @@ public final class TTViewRegistry {
     func frame(for identifier: String) -> CGRect? {
         frames[identifier]
     }
+
+    /// Returns the identifier whose registered frame contains the given point (global coords).
+    /// Picks the smallest matching frame so nested elements resolve to the most specific target.
+    func identifier(at point: CGPoint) -> String? {
+        frames
+            .filter { $0.value.contains(point) }
+            .min(by: { ($0.value.width * $0.value.height) < ($1.value.width * $1.value.height) })
+            .map { $0.key }
+    }
 }
 
 /// View modifier that registers a view's screen frame with TTViewRegistry.
