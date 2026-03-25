@@ -15,6 +15,7 @@ final class TTInspector {
     private var tapView: TTTapInterceptorView?
     private var hostingController: UIHostingController<AnyView>?
     private var closeButton: UIButton?          // UIKit button for banner ✕
+    private var modeSegment: UISegmentedControl? // Navigate / Select toggle
 
     private let state = TTInspectorState()
 
@@ -41,9 +42,11 @@ final class TTInspector {
         overlayWindow = window
 
         // 1 ── Full-screen tap interceptor (bottom layer, handles element capture)
+        //      Starts DISABLED — user begins in Navigate mode to scroll first.
         let tapper = TTTapInterceptorView(frame: window.bounds)
         tapper.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        tapper.backgroundColor = UIColor(red: 0, green: 0, blue: 1, alpha: 0.04)
+        tapper.backgroundColor = .clear
+        tapper.isUserInteractionEnabled = false
         tapper.onTap = { [weak self] point in self?.handleTap(at: point, in: window) }
         root.view.addSubview(tapper)
         tapView = tapper
@@ -82,11 +85,19 @@ final class TTInspector {
         pill.layer.shadowRadius = 10
         pill.translatesAutoresizingMaskIntoConstraints = false
 
-        let label = UILabel()
-        label.text = "Tap any element to capture it"
-        label.font = .systemFont(ofSize: 14, weight: .semibold)
-        label.textColor = .white
-        label.translatesAutoresizingMaskIntoConstraints = false
+        // Navigate | Select segmented control
+        let seg = UISegmentedControl(items: ["↕ Navigate", "◎ Select"])
+        seg.selectedSegmentIndex = 0   // start in Navigate mode
+        seg.translatesAutoresizingMaskIntoConstraints = false
+        seg.backgroundColor = UIColor.white.withAlphaComponent(0.15)
+        seg.selectedSegmentTintColor = UIColor.white.withAlphaComponent(0.28)
+        seg.setTitleTextAttributes(
+            [.foregroundColor: UIColor.white.withAlphaComponent(0.6),
+             .font: UIFont.systemFont(ofSize: 12, weight: .semibold)], for: .normal)
+        seg.setTitleTextAttributes(
+            [.foregroundColor: UIColor.white,
+             .font: UIFont.systemFont(ofSize: 12, weight: .bold)], for: .selected)
+        seg.addTarget(self, action: #selector(modeChanged(_:)), for: .valueChanged)
 
         let close = UIButton(type: .system)
         close.setTitle("✕", for: .normal)
@@ -95,7 +106,7 @@ final class TTInspector {
         close.translatesAutoresizingMaskIntoConstraints = false
         close.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
 
-        pill.addSubview(label)
+        pill.addSubview(seg)
         pill.addSubview(close)
         parent.addSubview(pill)
 
@@ -105,9 +116,10 @@ final class TTInspector {
             pill.trailingAnchor.constraint(equalTo: parent.trailingAnchor, constant: -16),
             pill.heightAnchor.constraint(equalToConstant: 48),
 
-            label.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 16),
-            label.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
-            label.trailingAnchor.constraint(equalTo: close.leadingAnchor, constant: -8),
+            seg.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 12),
+            seg.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
+            seg.trailingAnchor.constraint(equalTo: close.leadingAnchor, constant: -8),
+            seg.heightAnchor.constraint(equalToConstant: 32),
 
             close.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -12),
             close.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
@@ -117,6 +129,29 @@ final class TTInspector {
         pill.alpha = 0
         UIView.animate(withDuration: 0.3) { pill.alpha = 1 }
         closeButton = close
+        modeSegment = seg
+    }
+
+    // MARK: - Navigate / Select mode
+
+    @objc private func modeChanged(_ seg: UISegmentedControl) {
+        setNavigating(seg.selectedSegmentIndex == 0)
+    }
+
+    private func setNavigating(_ navigating: Bool) {
+        overlayWindow?.isNavigating = navigating
+        modeSegment?.selectedSegmentIndex = navigating ? 0 : 1
+
+        if navigating {
+            // Navigate: all touches fall through to the app (scroll, tap, swipe, etc.)
+            tapView?.isUserInteractionEnabled = false
+            tapView?.backgroundColor = .clear
+        } else {
+            // Select: intercept next tap to capture an element
+            guard state.phase == .tapping else { return }
+            tapView?.isUserInteractionEnabled = true
+            tapView?.backgroundColor = UIColor(red: 0, green: 0, blue: 1, alpha: 0.04)
+        }
     }
 
     // MARK: - Tap handling
@@ -138,9 +173,9 @@ final class TTInspector {
     private func retryCapture() {
         state.captured = nil
         state.phase = .tapping
-        tapView?.isUserInteractionEnabled = true
-        tapView?.backgroundColor = UIColor(red: 0, green: 0, blue: 1, alpha: 0.04)
         hostingController?.view.isUserInteractionEnabled = false
+        // Return to Navigate so the user can scroll to a different element before re-selecting
+        setNavigating(true)
     }
 
     // MARK: - Element identification
@@ -294,7 +329,17 @@ final class TTInspectorState: ObservableObject {
 
 // MARK: - TTInspectorWindow / TTTapInterceptorView
 
-final class TTInspectorWindow: UIWindow {}
+final class TTInspectorWindow: UIWindow {
+    /// When true, all touches fall through to the app below (scroll, tap, swipe freely).
+    /// When false, the tap interceptor is active for element capture.
+    var isNavigating: Bool = true
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        // In navigate mode return nil so UIKit routes the event to the next window (the app).
+        guard !isNavigating else { return nil }
+        return super.hitTest(point, with: event)
+    }
+}
 
 final class TTTapInterceptorView: UIView {
     var onTap: ((CGPoint) -> Void)?
