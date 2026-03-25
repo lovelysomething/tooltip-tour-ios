@@ -147,35 +147,66 @@ final class TTInspector {
     // MARK: - Element identification
 
     private func identifyView(at screenPoint: CGPoint) -> (identifier: String, displayName: String) {
-        // PRIMARY: check TTViewRegistry — all .ttTarget() views are registered here with
-        // accurate global frames, so this always wins over UIKit hierarchy traversal.
-        if let id = TTViewRegistry.shared.identifier(at: screenPoint) {
-            return (id, id)
-        }
-
-        // FALLBACK: UIKit accessibility traversal for views without .ttTarget()
         guard let appWindow = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .flatMap({ $0.windows })
             .first(where: { !($0 is TTInspectorWindow) && !($0 is TTOverlayWindow) })
         else { return ("unknown", "Unknown element") }
 
+        // PRIMARY: walk the UIAccessibility semantic tree.
+        // This is how XCTest finds SwiftUI elements — it's the correct tree,
+        // includes .accessibilityIdentifier() values, and skips internal containers.
+        if let result = accessibilityHit(at: screenPoint, in: appWindow) {
+            return result
+        }
+
+        // FALLBACK: UIKit view hierarchy (UILabel / UIButton text)
         let localPoint = appWindow.convert(screenPoint, from: nil)
         let hitView = appWindow.hitTest(localPoint, with: nil)
-
         var view: UIView? = hitView
         while let v = view {
-            let cls = String(describing: type(of: v))
-            let isInternal = cls.contains("Platform") || cls.contains("Hosting") || cls.contains("_UI")
-            if let id = v.accessibilityIdentifier, !id.isEmpty, !isInternal { return (id, id) }
-            if let lbl = v.accessibilityLabel, !lbl.isEmpty, !isInternal { return (safe(lbl), lbl) }
             if let l = v as? UILabel, let t = l.text, !t.isEmpty { return (safe(t), t) }
             if let b = v as? UIButton, let t = b.title(for: .normal), !t.isEmpty { return (safe(t), t) }
             view = v.superview
         }
 
-        let cls = String(describing: type(of: hitView as AnyObject))
-        return (cls, cls)
+        return ("unknown", "Unknown — add .accessibilityIdentifier() to this view")
+    }
+
+    /// Recursively search the UIAccessibility element tree for the smallest element
+    /// whose accessibilityFrame contains `point` and has an accessibilityIdentifier set.
+    private func accessibilityHit(at point: CGPoint, in element: NSObject) -> (String, String)? {
+        // Gather child accessibility elements (supports both array and count-based APIs)
+        var children: [NSObject] = []
+        if let arr = element.accessibilityElements as? [NSObject] {
+            children = arr
+        } else if element.accessibilityElementCount() > 0 {
+            children = (0 ..< element.accessibilityElementCount())
+                .compactMap { element.accessibilityElement(at: $0) as? NSObject }
+        } else if let view = element as? UIView {
+            // For plain UIViews with no accessibility element overrides, walk subviews
+            children = view.subviews.reversed()
+        }
+
+        // Search children first (deepest / most specific match wins)
+        for child in children {
+            let frame = child.accessibilityFrame
+            guard !frame.isEmpty, frame.contains(point) else { continue }
+            if let result = accessibilityHit(at: point, in: child) { return result }
+        }
+
+        // Check this element itself
+        let frame = element.accessibilityFrame
+        if !frame.isEmpty, frame.contains(point),
+           let id = element.accessibilityIdentifier, !id.isEmpty {
+            // Skip SwiftUI internal containers that may pick up the identifier accidentally
+            let cls = String(describing: type(of: element))
+            if !cls.contains("Platform") && !cls.contains("_UIHosting") {
+                return (id, id)
+            }
+        }
+
+        return nil
     }
 
     private func safe(_ text: String) -> String {
