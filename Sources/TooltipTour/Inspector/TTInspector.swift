@@ -146,13 +146,18 @@ final class TTInspector {
     // MARK: - Element identification
 
     private func identifyView(at screenPoint: CGPoint) -> (identifier: String, displayName: String) {
+        // PRIMARY: TTViewRegistry — populated by .ttTarget() modifier, most precise.
+        if let id = TTViewRegistry.shared.identifier(at: screenPoint) {
+            return (id, id)
+        }
+
         guard let appWindow = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .flatMap({ $0.windows })
             .first(where: { !($0 is TTInspectorWindow) && !($0 is TTOverlayWindow) })
         else { return ("unknown", "Unknown element") }
 
-        // PRIMARY: walk the UIAccessibility semantic tree.
+        // SECONDARY: walk the UIAccessibility semantic tree.
         // This is how XCTest finds SwiftUI elements — it's the correct tree,
         // includes .accessibilityIdentifier() values, and skips internal containers.
         if let result = accessibilityHit(at: screenPoint, in: appWindow) {
