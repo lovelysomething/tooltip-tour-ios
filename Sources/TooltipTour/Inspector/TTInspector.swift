@@ -165,47 +165,59 @@ final class TTInspector {
             return (safe(text), text)
         }
 
-        // Last resort: UIKit label/button text
+        // Last resort: walk UIKit view hierarchy upward from hit view.
+        // Check UILabel/UIButton text first, then accessibilityLabel on any UIView
+        // (SwiftUI hosting views set accessibilityLabel even without VoiceOver).
         let localPoint = appWindow.convert(screenPoint, from: nil)
         let hitView = appWindow.hitTest(localPoint, with: nil)
         var view: UIView? = hitView
         while let v = view {
             if let l = v as? UILabel, let t = l.text, !t.isEmpty { return (safe(t), t) }
             if let b = v as? UIButton, let t = b.title(for: .normal), !t.isEmpty { return (safe(t), t) }
+            if let label = v.accessibilityLabel, !label.isEmpty {
+                let cls = String(describing: type(of: v))
+                if !cls.contains("Platform") && !cls.contains("_UIHosting") && !cls.contains("UIWindow") {
+                    return (safe(label), label)
+                }
+            }
             view = v.superview
         }
 
         return ("unknown", "Unknown")
     }
 
-    /// Recursively search the UIAccessibility element tree for the smallest element
-    /// whose accessibilityFrame contains `point` and has an accessibilityIdentifier set.
-    private func accessibilityHit(at point: CGPoint, in element: NSObject) -> (String, String)? {
-        // Gather child accessibility elements (supports both array and count-based APIs)
-        var children: [NSObject] = []
-        if let arr = element.accessibilityElements as? [NSObject] {
-            children = arr
-        } else if element.accessibilityElementCount() > 0 {
-            children = (0 ..< element.accessibilityElementCount())
-                .compactMap { element.accessibilityElement(at: $0) as? NSObject }
-        } else if let view = element as? UIView {
-            // For plain UIViews with no accessibility element overrides, walk subviews
-            children = view.subviews.reversed()
+    /// Screen-space frame for an element. UIViews use their converted bounds because
+    /// `accessibilityFrame` is `.zero` on plain SwiftUI container views.
+    private func screenFrame(of element: NSObject) -> CGRect {
+        if let view = element as? UIView {
+            return view.convert(view.bounds, to: nil)
         }
+        return element.accessibilityFrame
+    }
 
-        // Search children first (deepest / most specific match wins)
-        for child in children {
-            let frame = child.accessibilityFrame
-            guard !frame.isEmpty, frame.contains(point) else { continue }
+    /// Collects the logical children of an accessibility element.
+    private func axChildren(of element: NSObject) -> [NSObject] {
+        if let arr = element.accessibilityElements as? [NSObject] { return arr }
+        if element.accessibilityElementCount() > 0 {
+            return (0 ..< element.accessibilityElementCount())
+                .compactMap { element.accessibilityElement(at: $0) as? NSObject }
+        }
+        if let view = element as? UIView { return view.subviews.reversed() }
+        return []
+    }
+
+    /// Recursively search the UIAccessibility element tree for the smallest element
+    /// whose frame contains `point` and has an accessibilityIdentifier set.
+    private func accessibilityHit(at point: CGPoint, in element: NSObject) -> (String, String)? {
+        for child in axChildren(of: element) {
+            guard screenFrame(of: child).contains(point) else { continue }
             if let result = accessibilityHit(at: point, in: child) { return result }
         }
 
-        // Check this element itself
-        let frame = element.accessibilityFrame
-        if !frame.isEmpty, frame.contains(point),
+        let frame = screenFrame(of: element)
+        if frame.contains(point),
            let id = (element as? UIAccessibilityIdentification)?.accessibilityIdentifier,
            !id.isEmpty {
-            // Skip SwiftUI internal containers that may pick up the identifier accidentally
             let cls = String(describing: type(of: element))
             if !cls.contains("Platform") && !cls.contains("_UIHosting") {
                 return (id, id)
@@ -217,25 +229,13 @@ final class TTInspector {
 
     /// Returns the accessibilityLabel of the most specific element at `point` that has one.
     private func accessibilityText(at point: CGPoint, in element: NSObject) -> String? {
-        var children: [NSObject] = []
-        if let arr = element.accessibilityElements as? [NSObject] {
-            children = arr
-        } else if element.accessibilityElementCount() > 0 {
-            children = (0 ..< element.accessibilityElementCount())
-                .compactMap { element.accessibilityElement(at: $0) as? NSObject }
-        } else if let view = element as? UIView {
-            children = view.subviews.reversed()
-        }
-
-        for child in children {
-            let frame = child.accessibilityFrame
-            guard !frame.isEmpty, frame.contains(point) else { continue }
+        for child in axChildren(of: element) {
+            guard screenFrame(of: child).contains(point) else { continue }
             if let result = accessibilityText(at: point, in: child) { return result }
         }
 
-        let frame = element.accessibilityFrame
-        if !frame.isEmpty, frame.contains(point),
-           let label = element.accessibilityLabel, !label.isEmpty {
+        let frame = screenFrame(of: element)
+        if frame.contains(point), let label = element.accessibilityLabel, !label.isEmpty {
             return label
         }
         return nil
