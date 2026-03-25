@@ -136,9 +136,8 @@ final class TTWalkthroughSession {
 
     // MARK: - Scroll to target
 
-    /// Walks up the view hierarchy from the target to find a UIScrollView.
-    /// Checks visibility in window space (reliable regardless of insets), scrolls if needed,
-    /// then calls completion after the animation settles. Calls immediately if already visible.
+    /// Scrolls the nearest ancestor UIScrollView so the target is visible,
+    /// then calls completion after the animation settles.
     private func scrollIntoViewIfNeeded(identifier: String, completion: @escaping () -> Void) {
         guard
             let appWindow = UIApplication.shared.connectedScenes
@@ -146,43 +145,29 @@ final class TTWalkthroughSession {
                 .flatMap({ $0.windows })
                 .first(where: { !($0 is TTOverlayWindow) }),
             let target = appWindow.findSubview(withIdentifier: identifier)
-        else { completion(); return }
-
-        // Check visibility using window-space frame — works regardless of content insets
-        let frameInWindow = target.convert(target.bounds, to: appWindow)
-        let safeVisible   = appWindow.safeAreaLayoutGuide.layoutFrame
-        guard !safeVisible.intersects(frameInWindow) else {
-            // Already on screen
+        else {
+            print("[TT] scrollIntoView: target '\(identifier)' not found")
             completion()
             return
         }
 
-        // Walk up to the nearest scrollable UIScrollView (contentSize taller than its frame)
-        var scrollView: UIScrollView?
+        // Walk up to find an ancestor UIScrollView — no contentSize check so we
+        // never skip the backing scroll view of a SwiftUI ScrollView.
         var cursor: UIView? = target.superview
         while let v = cursor {
-            if let sv = v as? UIScrollView,
-               sv.contentSize.height > sv.bounds.height {
-                scrollView = sv
-                break
+            if let sv = v as? UIScrollView {
+                let rectInContent = target.convert(target.bounds, to: sv)
+                let newY = max(-sv.adjustedContentInset.top, rectInContent.minY - 120)
+                print("[TT] scrollIntoView: scrolling '\(identifier)' — rect=\(rectInContent) newY=\(newY) current=\(sv.contentOffset.y)")
+                sv.setContentOffset(CGPoint(x: sv.contentOffset.x, y: newY), animated: true)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { completion() }
+                return
             }
             cursor = v.superview
         }
 
-        guard let sv = scrollView else { completion(); return }
-
-        // Compute the content offset that places the target near the top with padding
-        let rectInContent  = target.convert(target.bounds, to: sv)
-        let topPadding: CGFloat = 120          // breathing room above the element
-        let targetOffsetY  = max(-sv.adjustedContentInset.top,
-                                 rectInContent.minY - topPadding)
-        let maxOffsetY     = sv.contentSize.height - sv.bounds.height + sv.adjustedContentInset.bottom
-        let clampedOffsetY = min(targetOffsetY, maxOffsetY)
-
-        sv.setContentOffset(CGPoint(x: sv.contentOffset.x, y: clampedOffsetY), animated: true)
-
-        // UIScrollView animated scroll takes ~0.3 s; wait a touch longer to be safe
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) { completion() }
+        print("[TT] scrollIntoView: no UIScrollView ancestor found for '\(identifier)'")
+        completion()
     }
 
     // MARK: - Reposition beacon after scroll
