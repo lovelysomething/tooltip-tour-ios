@@ -3,7 +3,6 @@ import SwiftUI
 
 // MARK: - TTInspector
 
-/// Overlay inspector: tap any element → capture its identifier → send to dashboard.
 @MainActor
 final class TTInspector {
 
@@ -13,11 +12,11 @@ final class TTInspector {
     var onEnd: (() -> Void)?
 
     private var overlayWindow: TTInspectorWindow?
+    private var tapView: TTTapInterceptorView?
     private var hostingController: UIHostingController<AnyView>?
-    private var tapOverlayView: TTTapInterceptorView?
+    private var closeButton: UIButton?          // UIKit button for banner ✕
 
-    // Published state driven by SwiftUI overlay
-    private var state: TTInspectorState = TTInspectorState()
+    private let state = TTInspectorState()
 
     init(sessionId: String, networkClient: TTNetworkClient) {
         self.sessionId     = sessionId
@@ -27,12 +26,6 @@ final class TTInspector {
     // MARK: - Start
 
     func start() {
-        setupOverlayWindow()
-    }
-
-    // MARK: - Window
-
-    private func setupOverlayWindow() {
         guard let scene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .first(where: { $0.activationState == .foregroundActive }) else { return }
@@ -40,44 +33,91 @@ final class TTInspector {
         let window = TTInspectorWindow(windowScene: scene)
         window.windowLevel = .alert + 2
         window.backgroundColor = .clear
-        window.isUserInteractionEnabled = true
 
-        // Root VC with clear background
         let root = UIViewController()
         root.view.backgroundColor = .clear
         window.rootViewController = root
         window.makeKeyAndVisible()
         overlayWindow = window
 
-        // Full-screen tap interceptor (gets touches, forwards to handler)
+        // 1 ── Full-screen tap interceptor (bottom layer, handles element capture)
         let tapper = TTTapInterceptorView(frame: window.bounds)
         tapper.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        tapper.backgroundColor = UIColor.blue.withAlphaComponent(0.04)
-        tapper.onTap = { [weak self] point in
-            self?.handleTap(at: point, in: window)
-        }
+        tapper.backgroundColor = UIColor(red: 0, green: 0, blue: 1, alpha: 0.04)
+        tapper.onTap = { [weak self] point in self?.handleTap(at: point, in: window) }
         root.view.addSubview(tapper)
-        tapOverlayView = tapper
+        tapView = tapper
 
-        // SwiftUI overlay (banner + confirm card) on top
-        let overlayView = TTInspectorOverlayView(
+        // 2 ── SwiftUI layer (confirm card only — user interaction DISABLED during tapping)
+        let overlay = TTInspectorOverlayView(
             state: state,
-            onCancel: { [weak self] in self?.tearDown() },
-            onRetry: { [weak self] in self?.retryCapture() },
+            onRetry:  { [weak self] in self?.retryCapture() },
             onAccept: { [weak self] in
                 guard let self, let cap = self.state.captured else { return }
                 self.submitCapture(identifier: cap.identifier, displayName: cap.displayName)
             }
         )
-        let hc = UIHostingController(rootView: AnyView(overlayView))
+        let hc = UIHostingController(rootView: AnyView(overlay))
         hc.view.backgroundColor = .clear
+        hc.view.isUserInteractionEnabled = false   // taps fall through to tapper
         root.addChild(hc)
         hc.view.frame = root.view.bounds
         hc.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        hc.view.isUserInteractionEnabled = true
         root.view.addSubview(hc.view)
         hc.didMove(toParent: root)
         hostingController = hc
+
+        // 3 ── UIKit banner (always on top, owns the ✕ button)
+        addBanner(to: root.view)
+    }
+
+    // MARK: - Banner (UIKit — reliable first render)
+
+    private func addBanner(to parent: UIView) {
+        let pill = UIView()
+        pill.backgroundColor = UIColor(red: 0.098, green: 0.145, blue: 0.667, alpha: 1)
+        pill.layer.cornerRadius = 12
+        pill.layer.shadowColor = UIColor.black.cgColor
+        pill.layer.shadowOpacity = 0.25
+        pill.layer.shadowOffset = CGSize(width: 0, height: 4)
+        pill.layer.shadowRadius = 10
+        pill.translatesAutoresizingMaskIntoConstraints = false
+
+        let label = UILabel()
+        label.text = "Tap any element to capture it"
+        label.font = .systemFont(ofSize: 14, weight: .semibold)
+        label.textColor = .white
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        let close = UIButton(type: .system)
+        close.setTitle("✕", for: .normal)
+        close.setTitleColor(UIColor.white.withAlphaComponent(0.7), for: .normal)
+        close.titleLabel?.font = .systemFont(ofSize: 16)
+        close.translatesAutoresizingMaskIntoConstraints = false
+        close.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
+
+        pill.addSubview(label)
+        pill.addSubview(close)
+        parent.addSubview(pill)
+
+        NSLayoutConstraint.activate([
+            pill.topAnchor.constraint(equalTo: parent.safeAreaLayoutGuide.topAnchor, constant: 12),
+            pill.leadingAnchor.constraint(equalTo: parent.leadingAnchor, constant: 16),
+            pill.trailingAnchor.constraint(equalTo: parent.trailingAnchor, constant: -16),
+            pill.heightAnchor.constraint(equalToConstant: 48),
+
+            label.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 16),
+            label.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
+            label.trailingAnchor.constraint(equalTo: close.leadingAnchor, constant: -8),
+
+            close.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -12),
+            close.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
+            close.widthAnchor.constraint(equalToConstant: 36),
+        ])
+
+        pill.alpha = 0
+        UIView.animate(withDuration: 0.3) { pill.alpha = 1 }
+        closeButton = close
     }
 
     // MARK: - Tap handling
@@ -88,17 +128,20 @@ final class TTInspector {
         let screenPoint = window.convert(point, to: nil)
         let (identifier, displayName) = identifyView(at: screenPoint)
 
+        // Show confirm card — enable SwiftUI layer for button interaction
         state.captured = TTCapturedElement(identifier: identifier, displayName: displayName)
         state.phase = .confirming
-        tapOverlayView?.isUserInteractionEnabled = false
-        tapOverlayView?.backgroundColor = .clear
+        tapView?.isUserInteractionEnabled = false
+        tapView?.backgroundColor = .clear
+        hostingController?.view.isUserInteractionEnabled = true
     }
 
     private func retryCapture() {
         state.captured = nil
         state.phase = .tapping
-        tapOverlayView?.isUserInteractionEnabled = true
-        tapOverlayView?.backgroundColor = UIColor.blue.withAlphaComponent(0.04)
+        tapView?.isUserInteractionEnabled = true
+        tapView?.backgroundColor = UIColor(red: 0, green: 0, blue: 1, alpha: 0.04)
+        hostingController?.view.isUserInteractionEnabled = false
     }
 
     // MARK: - Element identification
@@ -115,29 +158,26 @@ final class TTInspector {
 
         var view: UIView? = hitView
         while let v = view {
-            if let id = v.accessibilityIdentifier, !id.isEmpty {
-                return (id, id)
-            }
-            if let label = v.accessibilityLabel, !label.isEmpty {
-                let safe = label.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let id = v.accessibilityIdentifier, !id.isEmpty { return (id, id) }
+            if let lbl = v.accessibilityLabel, !lbl.isEmpty {
+                let safe = lbl.trimmingCharacters(in: .whitespacesAndNewlines)
                     .replacingOccurrences(of: " ", with: "-").lowercased()
-                return (safe, label)
+                return (safe, lbl)
             }
-            if let lbl = v as? UILabel, let text = lbl.text, !text.isEmpty {
-                let safe = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let l = v as? UILabel, let t = l.text, !t.isEmpty {
+                let safe = t.trimmingCharacters(in: .whitespacesAndNewlines)
                     .replacingOccurrences(of: " ", with: "-").lowercased()
-                return (safe, text)
+                return (safe, t)
             }
-            if let btn = v as? UIButton, let text = btn.title(for: .normal), !text.isEmpty {
-                let safe = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let b = v as? UIButton, let t = b.title(for: .normal), !t.isEmpty {
+                let safe = t.trimmingCharacters(in: .whitespacesAndNewlines)
                     .replacingOccurrences(of: " ", with: "-").lowercased()
-                return (safe, text)
+                return (safe, t)
             }
             view = v.superview
         }
-
-        let className = String(describing: type(of: hitView as AnyObject))
-        return (className, className)
+        let cls = String(describing: type(of: hitView as AnyObject))
+        return (cls, cls)
     }
 
     // MARK: - Submit
@@ -146,16 +186,16 @@ final class TTInspector {
         state.phase = .done
         Task {
             try? await networkClient.updateInspectorSession(
-                id: sessionId,
-                identifier: identifier,
-                displayName: displayName
+                id: sessionId, identifier: identifier, displayName: displayName
             )
-            try? await Task.sleep(nanoseconds: 1_200_000_000) // 1.2s to show success
-            await MainActor.run { tearDown() }
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            await MainActor.run { self.tearDown() }
         }
     }
 
-    // MARK: - Tear down
+    // MARK: - Cancel / tear down
+
+    @objc private func cancelTapped() { tearDown() }
 
     private func tearDown() {
         UIView.animate(withDuration: 0.25, animations: {
@@ -163,8 +203,6 @@ final class TTInspector {
         }, completion: { _ in
             self.overlayWindow?.isHidden = true
             self.overlayWindow = nil
-            self.hostingController = nil
-            self.tapOverlayView = nil
             self.onEnd?()
         })
     }
@@ -174,10 +212,7 @@ final class TTInspector {
 
 enum TTInspectorPhase { case tapping, confirming, done }
 
-struct TTCapturedElement {
-    let identifier: String
-    let displayName: String
-}
+struct TTCapturedElement { let identifier: String; let displayName: String }
 
 @MainActor
 final class TTInspectorState: ObservableObject {
@@ -185,11 +220,9 @@ final class TTInspectorState: ObservableObject {
     @Published var captured: TTCapturedElement? = nil
 }
 
-// MARK: - TTInspectorWindow
+// MARK: - TTInspectorWindow / TTTapInterceptorView
 
 final class TTInspectorWindow: UIWindow {}
-
-// MARK: - TTTapInterceptorView
 
 final class TTTapInterceptorView: UIView {
     var onTap: ((CGPoint) -> Void)?
@@ -199,70 +232,34 @@ final class TTTapInterceptorView: UIView {
     }
 }
 
-// MARK: - TTInspectorOverlayView
+// MARK: - SwiftUI confirm card overlay (shown only during confirming/done)
 
 struct TTInspectorOverlayView: View {
     @ObservedObject var state: TTInspectorState
-    let onCancel: () -> Void
     let onRetry: () -> Void
     let onAccept: () -> Void
 
     var body: some View {
-        ZStack(alignment: .top) {
+        ZStack(alignment: .bottom) {
             Color.clear
-
-            VStack {
-                // Banner
-                HStack {
-                    Text(state.phase == .tapping ? "Tap any element to capture it" : "Element captured")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
-                    Spacer()
-                    Button(action: onCancel) {
-                        Text("✕")
-                            .font(.system(size: 16))
-                            .foregroundColor(.white.opacity(0.7))
-                    }
-                }
+            if (state.phase == .confirming || state.phase == .done), let cap = state.captured {
+                TTConfirmCard(
+                    displayName: cap.displayName,
+                    identifier: cap.identifier,
+                    isDone: state.phase == .done,
+                    onRetry: onRetry,
+                    onAccept: onAccept
+                )
                 .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .background(Color(red: 0.098, green: 0.145, blue: 0.667))
-                .cornerRadius(12)
-                .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 4)
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-
-                Spacer()
-
-                // Confirm card
-                if state.phase == .confirming || state.phase == .done, let cap = state.captured {
-                    TTInspectorConfirmCard(
-                        displayName: cap.displayName,
-                        identifier: cap.identifier,
-                        isDone: state.phase == .done,
-                        onRetry: onRetry,
-                        onAccept: onAccept
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 40)
-                }
-            }
-        }
-        .allowsHitTesting(state.phase != .tapping) // let taps through when in tapping mode except banner
-        .overlay(alignment: .top) {
-            if state.phase == .tapping {
-                Color.clear
-                    .frame(height: 80)
-                    .allowsHitTesting(false)
-                    // Banner area needs to allow its own button hits
+                .padding(.bottom, 48)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.spring(duration: 0.35), value: state.phase)
             }
         }
     }
 }
 
-// MARK: - TTInspectorConfirmCard
-
-struct TTInspectorConfirmCard: View {
+struct TTConfirmCard: View {
     let displayName: String
     let identifier: String
     let isDone: Bool
@@ -304,9 +301,8 @@ struct TTInspectorConfirmCard: View {
                             .textCase(.uppercase)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
+                            .foregroundColor(Color(red: 0.051, green: 0.039, blue: 0.11).opacity(0.4))
                     }
-                    .foregroundColor(Color(red: 0.051, green: 0.039, blue: 0.11).opacity(0.4))
-
                     Button(action: onAccept) {
                         Text("Use this →")
                             .font(.system(size: 11, weight: .bold))
@@ -314,9 +310,9 @@ struct TTInspectorConfirmCard: View {
                             .textCase(.uppercase)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
+                            .foregroundColor(.white)
+                            .background(Color(red: 0.098, green: 0.145, blue: 0.667))
                     }
-                    .foregroundColor(.white)
-                    .background(Color(red: 0.098, green: 0.145, blue: 0.667))
                 }
             }
         }
