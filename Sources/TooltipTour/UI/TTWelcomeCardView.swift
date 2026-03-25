@@ -1,84 +1,89 @@
 import SwiftUI
 
+/// The initial launch card shown at the bottom of the screen.
+/// The X button sits *below* the card so it never competes with the card content.
 struct TTWelcomeCardView: View {
     let config: TTConfig
     let onStart: () -> Void
-    let onClose: () -> Void
+    let onDismiss: () -> Void        // taps X → minimise to circle
     let onDontShowAgain: () -> Void
 
     private var styles: TTStyles? { config.styles }
+
     private var cardBg: Color     { Color(styles?.resolvedCardBgColor  ?? .systemBackground) }
     private var titleColor: Color { Color(styles?.resolvedTitleColor   ?? .label) }
-    private var bodyColor: Color  { Color(styles?.resolvedBodyColor    ?? .secondaryLabel) }
+    private var bodyColor: Color  { Color(styles?.resolvedBodyColor    ?? UIColor(hex: "6b7280") ?? .secondaryLabel) }
     private var btnBg: Color      { Color(styles?.resolvedBtnBgColor   ?? .systemIndigo) }
     private var btnText: Color    { Color(styles?.resolvedBtnTextColor ?? .white) }
-    private var cardRadius: CGFloat { min((styles?.cardCornerRadius ?? 14) + 2, 24) }
-    private var btnRadius: CGFloat  { styles?.btnCornerRadius ?? 8 }
+    private var cardRadius: CGFloat { styles?.cardCornerRadius ?? 16 }
+    private var btnRadius: CGFloat  { styles?.btnCornerRadius  ?? 8 }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            VStack(alignment: .leading, spacing: 0) {
-                // Emoji — append U+FE0F to force colour emoji presentation
-                if let emoji = config.welcomeEmoji, !emoji.isEmpty {
-                    Text(emoji)
-                        .font(.system(size: 32))
-                        .padding(.bottom, 12)
-                }
-
+        VStack(spacing: 0) {
+            // ── White card ────────────────────────────────────────────────────
+            VStack(spacing: 0) {
                 // Title
                 if let title = config.welcomeTitle, !title.isEmpty {
                     Text(title)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: 18, weight: .bold))
                         .foregroundColor(titleColor)
+                        .multilineTextAlignment(.center)
                         .padding(.bottom, 8)
                 }
 
-                // Message
+                // Body
                 if let msg = config.welcomeMessage, !msg.isEmpty {
                     Text(msg)
                         .font(.system(size: 14))
                         .foregroundColor(bodyColor)
-                        .lineSpacing(3)
+                        .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.bottom, 20)
                 }
 
                 // CTA button
                 Button(action: onStart) {
-                    Text("Yes, show me around")
-                        .font(.system(size: 14, weight: .semibold))
+                    Text("Yes, show me around!")
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundColor(btnText)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 11)
+                        .padding(.vertical, 13)
                         .background(btnBg)
                         .clipShape(RoundedRectangle(cornerRadius: btnRadius))
                 }
-                .padding(.bottom, 10)
+                .padding(.bottom, 14)
 
                 // Don't show again
                 Button(action: onDontShowAgain) {
                     Text("Don't show again")
-                        .font(.system(size: 13))
-                        .foregroundColor(Color(UIColor.tertiaryLabel))
+                        .font(.system(size: 14))
+                        .foregroundColor(Color(UIColor(hex: "9ca3b0") ?? .tertiaryLabel))
                         .underline()
-                        .frame(maxWidth: .infinity)
                 }
             }
-            .padding(24)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 20)
             .background(cardBg)
             .clipShape(RoundedRectangle(cornerRadius: cardRadius))
-            .shadow(color: .black.opacity(0.18), radius: 20, x: 0, y: 8)
-            .frame(width: 300)
+            .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 0)
 
-            // Close X
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(Color(UIColor.tertiaryLabel))
-                    .frame(width: 28, height: 28)
+            // ── Gap between card and X ────────────────────────────────────────
+            Spacer().frame(height: 16)
+
+            // ── X dismiss circle (below the card, centered) ───────────────────
+            Button(action: onDismiss) {
+                ZStack {
+                    Circle()
+                        .fill(Color.black.opacity(0.35))
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white)
+                }
+                .frame(width: 22, height: 22)
             }
-            .padding(.top, 8)
-            .padding(.trailing, 8)
+
+            Spacer().frame(height: 20)
         }
+        .padding(.horizontal, 20)
     }
 }

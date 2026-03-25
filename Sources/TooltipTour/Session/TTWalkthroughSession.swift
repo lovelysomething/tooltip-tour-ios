@@ -78,10 +78,14 @@ final class TTWalkthroughSession {
             let frame = findTargetFrame(identifier: step.selector)
             guard frame != .zero else { continue }
 
-            let windowWidth = overlayWindow?.bounds.width ?? UIScreen.main.bounds.width
+            let windowWidth  = overlayWindow?.bounds.width  ?? UIScreen.main.bounds.width
             let windowHeight = overlayWindow?.bounds.height ?? UIScreen.main.bounds.height
-            let rawX = frame.maxX - beaconSize / 2
-            let rawY = frame.minY - beaconSize / 2
+
+            // Beacon: 15 pt inset from right edge of target, vertically centred on target
+            let beaconCenterX = frame.maxX - 15
+            let beaconCenterY = frame.midY
+            let rawX = beaconCenterX - beaconSize / 2
+            let rawY = beaconCenterY - beaconSize / 2
             let clampedX = min(max(rawX, 4), windowWidth  - beaconSize - 4)
             let clampedY = min(max(rawY, 4), windowHeight - beaconSize - 4)
 
@@ -195,14 +199,33 @@ final class TTWalkthroughSession {
         root.addChild(hc)
         root.view.addSubview(hc.view)
         hc.didMove(toParent: root)
-        cardHostingController = hc
 
         hc.view.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            hc.view.leadingAnchor.constraint(equalTo: root.view.leadingAnchor),
-            hc.view.trailingAnchor.constraint(equalTo: root.view.trailingAnchor),
-            hc.view.bottomAnchor.constraint(equalTo: root.view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
-        ])
+
+        // Position card 30 pt below the active beacon.
+        // If that would leave less than 180 pt to the screen bottom, flip above.
+        let windowHeight  = overlayWindow?.bounds.height ?? UIScreen.main.bounds.height
+        let beaconFrame   = index < beaconViews.count ? beaconViews[index].frame : .zero
+        let cardGap: CGFloat = 30
+        let cardTop       = beaconFrame.maxY + cardGap
+        let flipAbove     = cardTop + 200 > windowHeight - 40  // 200 = rough card height estimate
+
+        var constraints: [NSLayoutConstraint] = [
+            hc.view.leadingAnchor.constraint(equalTo: root.view.leadingAnchor,  constant: 20),
+            hc.view.trailingAnchor.constraint(equalTo: root.view.trailingAnchor, constant: -20),
+        ]
+        if flipAbove {
+            // Card bottom sits 30 pt above the beacon top
+            constraints.append(
+                hc.view.bottomAnchor.constraint(equalTo: root.view.topAnchor,
+                                                constant: beaconFrame.minY - cardGap)
+            )
+        } else {
+            constraints.append(
+                hc.view.topAnchor.constraint(equalTo: root.view.topAnchor, constant: cardTop)
+            )
+        }
+        NSLayoutConstraint.activate(constraints)
     }
 
     // MARK: - View finding

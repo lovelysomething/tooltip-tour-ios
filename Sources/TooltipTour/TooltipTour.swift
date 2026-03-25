@@ -43,12 +43,18 @@ public final class TooltipTour {
         try? await networkClient?.fetchConfig(siteKey: siteKey)
     }
 
+    /// Called by TTLauncherState after the session ends so the launcher can show the minimised circle.
+    var onSessionEnd: (() -> Void)?
+
     /// Start the walkthrough with a pre-loaded config. Used internally by TTLauncherView.
     public func startSession(config: TTConfig) {
         guard activeSession == nil else { return }
         guard let tracker else { return }
         let session = TTWalkthroughSession(config: config, siteKey: siteKey, tracker: tracker)
-        session.onEnd = { [weak self] in self?.activeSession = nil }
+        session.onEnd = { [weak self] in
+            self?.activeSession = nil
+            self?.onSessionEnd?()
+        }
         activeSession = session
         session.start()
     }

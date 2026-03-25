@@ -35,12 +35,16 @@ public struct TTFabStyle: Codable {
     public let bgColor: String?
     public let borderRadius: Double?
     public let icon: String?
+    /// "left" or "right" — which side of the screen the minimised circle sits on. Default "right".
     public let position: String?
+    /// Distance in points above the safe-area bottom edge for the minimised circle. Default 40.
+    public let bottomOffset: Double?
     enum CodingKeys: String, CodingKey {
         case bgColor = "bg_color"
         case borderRadius = "border_radius"
         case icon
         case position
+        case bottomOffset = "bottom_offset"
     }
 }
 
