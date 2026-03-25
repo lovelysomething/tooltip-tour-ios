@@ -10,9 +10,11 @@ public struct TTLauncherView: View {
             Color.clear
 
             if state.isReady, let config = state.config {
+                let alignRight = (config.styles?.fab?.position ?? "right") != "left"
+
                 if state.isMinimised {
-                    minimisedCircle(config: config)
-                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                    minimisedCircle(config: config, alignRight: alignRight)
+                        .transition(.move(edge: alignRight ? .trailing : .leading))
                 } else if state.showWelcome {
                     TTWelcomeCardView(
                         config: config,
@@ -31,10 +33,9 @@ public struct TTLauncherView: View {
     // MARK: - Minimised circle
 
     @ViewBuilder
-    private func minimisedCircle(config: TTConfig) -> some View {
+    private func minimisedCircle(config: TTConfig, alignRight: Bool) -> some View {
         let fabBg        = Color(config.styles?.resolvedFabBgColor ?? .systemIndigo)
         let icon         = TTIcon.from(config.styles?.fab?.icon)
-        let alignRight   = (config.styles?.fab?.position ?? "right") != "left"
         let bottomOffset = CGFloat(config.styles?.fab?.bottomOffset ?? 40) + bottomSafeArea
 
         HStack {
@@ -42,13 +43,13 @@ public struct TTLauncherView: View {
 
             Button(action: { state.expandFab() }) {
                 ZStack {
-                    Circle()
-                        .fill(fabBg)
-                        .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 0)
+                    Circle().fill(fabBg)
                     TTIconView(icon: icon, color: .white, size: 15)
                 }
                 .frame(width: 44, height: 44)
             }
+            // Shadow outside the button so it isn't clipped by the button frame
+            .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 0)
 
             if !alignRight { Spacer() }
         }
@@ -83,20 +84,20 @@ final class TTLauncherState: ObservableObject {
             guard let config else { return }
             isReady = true
 
-            // In the new design the circle is always the minimised state,
-            // so startMinimized just means "skip the welcome card on this load".
-            // If autoOpen is true and the user hasn't dismissed, show the welcome card.
-            if config.autoOpen && !isDismissed(config.id) {
-                if !config.startMinimized {
-                    try? await Task.sleep(nanoseconds: 800_000_000)
-                    openWelcome()
-                } else {
-                    // startMinimized: show circle first, open welcome on first tap
+            // New design: welcome card shows on every launch unless the user
+            // has previously tapped "Don't show again" (isDismissed).
+            // startMinimized skips the welcome card and goes straight to circle.
+            if !isDismissed(config.id) {
+                if config.startMinimized {
+                    // Circle first; welcome card opens on first tap
                     isMinimised = true
                     pendingAutoOpen = true
+                } else {
+                    try? await Task.sleep(nanoseconds: 800_000_000)
+                    openWelcome()
                 }
             } else {
-                // autoOpen off or already dismissed — show nothing until circle is tapped
+                // Permanently dismissed — sit as circle until tapped
                 isMinimised = true
             }
         }
@@ -105,15 +106,15 @@ final class TTLauncherState: ObservableObject {
     func openWelcome()  { withAnimation(.easeOut(duration: 0.28)) { showWelcome = true } }
     func closeWelcome() { withAnimation(.easeOut(duration: 0.22)) { showWelcome = false } }
 
-    /// X tapped on welcome card → slide down and show minimised circle
+    /// X tapped on welcome card → slide card down, slide circle in from edge
     func minimise() {
-        withAnimation(.easeOut(duration: 0.25)) {
+        withAnimation(.easeOut(duration: 0.28)) {
             showWelcome = false
             isMinimised = true
         }
     }
 
-    /// Tapped the minimised circle → show welcome card
+    /// Tapped the minimised circle → slide circle out, show welcome card
     func expandFab() {
         withAnimation(.easeOut(duration: 0.25)) { isMinimised = false }
         if pendingAutoOpen, let config, !isDismissed(config.id) {
@@ -127,15 +128,15 @@ final class TTLauncherState: ObservableObject {
     func startGuide() {
         closeWelcome()
         guard let config else { return }
-        // When the session ends (Finish or dismiss), slide the minimised circle back in
+        // When the session ends (Finish or dismiss) → slide the circle back in from edge
         TooltipTour.shared.onSessionEnd = { [weak self] in
             guard let self else { return }
-            withAnimation(.easeOut(duration: 0.28)) { self.isMinimised = true }
+            withAnimation(.easeOut(duration: 0.35)) { self.isMinimised = true }
         }
         TooltipTour.shared.startSession(config: config)
     }
 
-    /// "Don't show again" → dismiss permanently, no minimised circle
+    /// "Don't show again" → dismiss permanently
     func dontShowAgain() {
         guard let config else { return }
         setDismissed(config.id)
@@ -150,4 +151,3 @@ final class TTLauncherState: ObservableObject {
         UserDefaults.standard.set(true, forKey: "tt-dismissed-\(id)")
     }
 }
-
