@@ -156,28 +156,53 @@ final class TTInspector {
         let localPoint = appWindow.convert(screenPoint, from: nil)
         let hitView = appWindow.hitTest(localPoint, with: nil)
 
+        // Walk UP the hierarchy — SwiftUI sets accessibilityIdentifier on internal
+        // container views (PlatformGroupContainer etc.), so keep going up until we
+        // find a meaningful identifier, label, or text content.
         var view: UIView? = hitView
         while let v = view {
-            if let id = v.accessibilityIdentifier, !id.isEmpty { return (id, id) }
-            if let lbl = v.accessibilityLabel, !lbl.isEmpty {
-                let safe = lbl.trimmingCharacters(in: .whitespacesAndNewlines)
-                    .replacingOccurrences(of: " ", with: "-").lowercased()
+            let cls = String(describing: type(of: v))
+            let isInternalContainer = cls.contains("Platform") || cls.contains("Hosting") || cls.contains("_UI")
+
+            if let id = v.accessibilityIdentifier, !id.isEmpty, !isInternalContainer {
+                return (id, id)
+            }
+            // Accept accessibilityIdentifier even on containers as last resort
+            if let id = v.accessibilityIdentifier, !id.isEmpty {
+                return (id, id)
+            }
+            if let lbl = v.accessibilityLabel, !lbl.isEmpty, !isInternalContainer {
+                let safe = safe(lbl)
                 return (safe, lbl)
             }
             if let l = v as? UILabel, let t = l.text, !t.isEmpty {
-                let safe = t.trimmingCharacters(in: .whitespacesAndNewlines)
-                    .replacingOccurrences(of: " ", with: "-").lowercased()
-                return (safe, t)
+                return (safe(t), t)
             }
             if let b = v as? UIButton, let t = b.title(for: .normal), !t.isEmpty {
-                let safe = t.trimmingCharacters(in: .whitespacesAndNewlines)
-                    .replacingOccurrences(of: " ", with: "-").lowercased()
-                return (safe, t)
+                return (safe(t), t)
             }
             view = v.superview
         }
+
+        // Fallback: first sibling or parent with a real identifier
+        var search: UIView? = hitView?.superview
+        while let v = search {
+            for sub in v.subviews {
+                if let id = sub.accessibilityIdentifier, !id.isEmpty {
+                    return (id, id)
+                }
+            }
+            search = v.superview
+        }
+
         let cls = String(describing: type(of: hitView as AnyObject))
         return (cls, cls)
+    }
+
+    private func safe(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: " ", with: "-")
+            .lowercased()
     }
 
     // MARK: - Submit
