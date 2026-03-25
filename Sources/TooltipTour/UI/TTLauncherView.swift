@@ -45,7 +45,7 @@ public struct TTLauncherView: View {
                     Circle()
                         .fill(fabBg)
                         .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 0)
-                    TTIconView(icon: icon, color: .white, size: 22)
+                    TTIconView(icon: icon, color: .white, size: 15)
                 }
                 .frame(width: 44, height: 44)
             }
@@ -83,14 +83,21 @@ final class TTLauncherState: ObservableObject {
             guard let config else { return }
             isReady = true
 
-            if config.startMinimized {
-                isMinimised = true
-                if config.autoOpen && !isDismissed(config.id) {
+            // In the new design the circle is always the minimised state,
+            // so startMinimized just means "skip the welcome card on this load".
+            // If autoOpen is true and the user hasn't dismissed, show the welcome card.
+            if config.autoOpen && !isDismissed(config.id) {
+                if !config.startMinimized {
+                    try? await Task.sleep(nanoseconds: 800_000_000)
+                    openWelcome()
+                } else {
+                    // startMinimized: show circle first, open welcome on first tap
+                    isMinimised = true
                     pendingAutoOpen = true
                 }
-            } else if config.autoOpen && !isDismissed(config.id) {
-                try? await Task.sleep(nanoseconds: 800_000_000)
-                openWelcome()
+            } else {
+                // autoOpen off or already dismissed — show nothing until circle is tapped
+                isMinimised = true
             }
         }
     }
