@@ -108,7 +108,7 @@ final class TTLauncherState: ObservableObject {
 
     /// X tapped on welcome card → slide card down, slide circle in from edge
     func minimise() {
-        withAnimation(.easeOut(duration: 0.28)) {
+        withAnimation(.easeInOut(duration: 0.5)) {
             showWelcome = false
             isMinimised = true
         }
@@ -116,7 +116,7 @@ final class TTLauncherState: ObservableObject {
 
     /// Tapped the minimised circle → slide circle out, show welcome card
     func expandFab() {
-        withAnimation(.easeOut(duration: 0.25)) { isMinimised = false }
+        withAnimation(.easeInOut(duration: 0.45)) { isMinimised = false }
         if pendingAutoOpen, let config, !isDismissed(config.id) {
             pendingAutoOpen = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.openWelcome() }
@@ -131,7 +131,7 @@ final class TTLauncherState: ObservableObject {
         // When the session ends (Finish or dismiss) → slide the circle back in from edge
         TooltipTour.shared.onSessionEnd = { [weak self] in
             guard let self else { return }
-            withAnimation(.easeOut(duration: 0.35)) { self.isMinimised = true }
+            withAnimation(.easeInOut(duration: 0.5)) { self.isMinimised = true }
         }
         TooltipTour.shared.startSession(config: config)
     }
