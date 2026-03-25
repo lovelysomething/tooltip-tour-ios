@@ -293,9 +293,19 @@ final class TTInspectorWindow: UIWindow {}
 
 final class TTTapInterceptorView: UIView {
     var onTap: ((CGPoint) -> Void)?
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = touches.first else { return }
-        onTap?(touch.location(in: self))
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        let gr = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
+        gr.cancelsTouchesInView = true
+        gr.delaysTouchesBegan  = true
+        addGestureRecognizer(gr)
+    }
+
+    required init?(coder: NSCoder) { super.init(coder: coder) }
+
+    @objc private func tapped(_ gr: UITapGestureRecognizer) {
+        onTap?(gr.location(in: self))
     }
 }
 
