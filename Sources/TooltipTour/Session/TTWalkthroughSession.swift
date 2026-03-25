@@ -137,8 +137,8 @@ final class TTWalkthroughSession {
     // MARK: - Scroll to target
 
     /// Walks up the view hierarchy from the target to find a UIScrollView.
-    /// If found and the target isn't fully visible, scrolls it in with animation
-    /// and calls completion after the animation (≈0.4 s). Otherwise calls immediately.
+    /// Checks visibility in window space (reliable regardless of insets), scrolls if needed,
+    /// then calls completion after the animation settles. Calls immediately if already visible.
     private func scrollIntoViewIfNeeded(identifier: String, completion: @escaping () -> Void) {
         guard
             let appWindow = UIApplication.shared.connectedScenes
@@ -148,35 +148,40 @@ final class TTWalkthroughSession {
             let target = appWindow.findSubview(withIdentifier: identifier)
         else { completion(); return }
 
-        // Walk up to the nearest ancestor UIScrollView
+        // Check visibility using window-space frame — works regardless of content insets
+        let frameInWindow = target.convert(target.bounds, to: appWindow)
+        let safeVisible   = appWindow.safeAreaLayoutGuide.layoutFrame
+        guard !safeVisible.intersects(frameInWindow) else {
+            // Already on screen
+            completion()
+            return
+        }
+
+        // Walk up to the nearest scrollable UIScrollView (contentSize taller than its frame)
         var scrollView: UIScrollView?
         var cursor: UIView? = target.superview
         while let v = cursor {
-            if let sv = v as? UIScrollView { scrollView = sv; break }
+            if let sv = v as? UIScrollView,
+               sv.contentSize.height > sv.bounds.height {
+                scrollView = sv
+                break
+            }
             cursor = v.superview
         }
 
         guard let sv = scrollView else { completion(); return }
 
-        let rectInScrollView = target.convert(target.bounds, to: sv)
-        let visibleRect = CGRect(
-            x: sv.contentOffset.x,
-            y: sv.contentOffset.y,
-            width:  sv.bounds.width,
-            height: sv.bounds.height - sv.adjustedContentInset.bottom
-        )
+        // Compute the content offset that places the target near the top with padding
+        let rectInContent  = target.convert(target.bounds, to: sv)
+        let topPadding: CGFloat = 120          // breathing room above the element
+        let targetOffsetY  = max(-sv.adjustedContentInset.top,
+                                 rectInContent.minY - topPadding)
+        let maxOffsetY     = sv.contentSize.height - sv.bounds.height + sv.adjustedContentInset.bottom
+        let clampedOffsetY = min(targetOffsetY, maxOffsetY)
 
-        guard !visibleRect.contains(rectInScrollView) else {
-            // Already fully visible — no scroll needed
-            completion()
-            return
-        }
+        sv.setContentOffset(CGPoint(x: sv.contentOffset.x, y: clampedOffsetY), animated: true)
 
-        // Add generous padding so the element isn't flush against the edge
-        let padded = rectInScrollView.insetBy(dx: -24, dy: -100)
-        sv.scrollRectToVisible(padded, animated: true)
-
-        // Wait for the default UIScrollView animation (0.3 s) + a small buffer
+        // UIScrollView animated scroll takes ~0.3 s; wait a touch longer to be safe
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.42) { completion() }
     }
 
