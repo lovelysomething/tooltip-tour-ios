@@ -24,6 +24,7 @@ public final class TooltipTour {
     private var networkClient: TTNetworkClient?
     private var tracker: TTEventTracker?
     private var activeSession: TTWalkthroughSession?
+    private var activeInspector: TTInspector?
 
     private init() {}
 
@@ -63,5 +64,33 @@ public final class TooltipTour {
     public func endSession() {
         activeSession?.dismiss()
         activeSession = nil
+    }
+
+    // MARK: - Inspector
+
+    /// Handle a deep link URL. Call from `.onOpenURL` in SwiftUI or `application(_:open:)` in UIKit.
+    ///
+    /// Supported scheme: `tooltiptour://inspect?session={id}&base={encodedURL}`
+    public func handleDeepLink(_ url: URL) {
+        guard url.scheme == "tooltiptour",
+              url.host == "inspect",
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let sessionId = components.queryItems?.first(where: { $0.name == "session" })?.value,
+              let baseEncoded = components.queryItems?.first(where: { $0.name == "base" })?.value,
+              let inspectorBase = baseEncoded.removingPercentEncoding ?? Optional(baseEncoded)
+        else { return }
+        startInspector(sessionId: sessionId, baseURL: inspectorBase)
+    }
+
+    /// Start the visual inspector overlay for the given session.
+    public func startInspector(sessionId: String, baseURL: String) {
+        guard activeInspector == nil else { return }
+        let client = TTNetworkClient(baseURL: baseURL)
+        let inspector = TTInspector(sessionId: sessionId, networkClient: client)
+        inspector.onEnd = { [weak self] in
+            self?.activeInspector = nil
+        }
+        activeInspector = inspector
+        inspector.start()
     }
 }
