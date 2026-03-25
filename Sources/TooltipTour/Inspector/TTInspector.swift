@@ -86,7 +86,7 @@ final class TTInspector {
         pill.translatesAutoresizingMaskIntoConstraints = false
 
         // Navigate | Select segmented control
-        let seg = UISegmentedControl(items: ["↕ Navigate", "◎ Select"])
+        let seg = UISegmentedControl(items: ["Navigate", "Select"])
         seg.selectedSegmentIndex = 0   // start in Navigate mode
         seg.translatesAutoresizingMaskIntoConstraints = false
         seg.backgroundColor = UIColor.white.withAlphaComponent(0.15)
@@ -330,14 +330,18 @@ final class TTInspectorState: ObservableObject {
 // MARK: - TTInspectorWindow / TTTapInterceptorView
 
 final class TTInspectorWindow: UIWindow {
-    /// When true, all touches fall through to the app below (scroll, tap, swipe freely).
-    /// When false, the tap interceptor is active for element capture.
+    /// When true, touches that don't land on a real control (banner) fall through to the app.
+    /// When false, the tap interceptor is active and all touches are captured.
     var isNavigating: Bool = true
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        // In navigate mode return nil so UIKit routes the event to the next window (the app).
-        guard !isNavigating else { return nil }
-        return super.hitTest(point, with: event)
+        let hit = super.hitTest(point, with: event)
+        guard isNavigating else { return hit }
+        // In navigate mode only intercept touches that hit a real control (banner pill etc.).
+        // If the result is just the transparent root background, return nil so UIKit
+        // routes the event to the next window (the app) — enabling free scroll/tap.
+        if hit == rootViewController?.view { return nil }
+        return hit
     }
 }
 
