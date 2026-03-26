@@ -58,6 +58,7 @@ final class TTInspector {
         // 2 ── SwiftUI layer (confirm card only — user interaction DISABLED during tapping)
         let overlay = TTInspectorOverlayView(
             state: state,
+            mode: mode,
             onRetry:  { [weak self] in self?.retryCapture() },
             onAccept: { [weak self] finalIdentifier in
                 self?.submitCapture(identifier: finalIdentifier, displayName: finalIdentifier)
@@ -108,7 +109,7 @@ final class TTInspector {
             label.translatesAutoresizingMaskIntoConstraints = false
 
             let captureBtn = UIButton(type: .system)
-            captureBtn.setTitle("Capture this screen", for: .normal)
+            captureBtn.setTitle("Set Page", for: .normal)
             captureBtn.setTitleColor(.white, for: .normal)
             captureBtn.titleLabel?.font = .systemFont(ofSize: 12, weight: .bold)
             captureBtn.backgroundColor = UIColor.white.withAlphaComponent(0.22)
@@ -578,6 +579,7 @@ final class TTTapInterceptorView: UIView {
 
 struct TTInspectorOverlayView: View {
     @ObservedObject var state: TTInspectorState
+    let mode: TTInspectorMode
     let onRetry: () -> Void
     let onAccept: (String) -> Void   // passes the final (possibly edited) identifier
 
@@ -588,6 +590,7 @@ struct TTInspectorOverlayView: View {
                 TTConfirmCard(
                     suggestedIdentifier: cap.identifier == "unknown" ? "" : cap.identifier,
                     isDone: state.phase == .done,
+                    subtitle: mode == .page ? "Name this page" : "Name this element",
                     onRetry: onRetry,
                     onAccept: onAccept
                 )
@@ -603,6 +606,7 @@ struct TTInspectorOverlayView: View {
 struct TTConfirmCard: View {
     let suggestedIdentifier: String
     let isDone: Bool
+    let subtitle: String
     let onRetry: () -> Void
     let onAccept: (String) -> Void
 
@@ -618,7 +622,7 @@ struct TTConfirmCard: View {
                     .tracking(1.5)
                     .textCase(.uppercase)
                     .foregroundColor(Color(red: 0.098, green: 0.145, blue: 0.667).opacity(0.65))
-                Text(isDone ? identifier : "Name this element")
+                Text(isDone ? identifier : subtitle)
                     .font(.system(size: 20, weight: .heavy))
                     .foregroundColor(Color(red: 0.051, green: 0.039, blue: 0.11))
                     .lineLimit(1)

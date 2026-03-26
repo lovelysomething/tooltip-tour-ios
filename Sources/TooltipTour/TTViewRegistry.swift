@@ -17,6 +17,10 @@ public final class TTViewRegistry {
         frames[identifier] = frame
     }
 
+    func unregister(identifier: String) {
+        frames.removeValue(forKey: identifier)
+    }
+
     func frame(for identifier: String) -> CGRect? {
         frames[identifier]
     }
@@ -46,6 +50,9 @@ public struct TTTarget: ViewModifier {
                                 identifier: identifier,
                                 frame: geo.frame(in: .global)
                             )
+                        }
+                        .onDisappear {
+                            TTViewRegistry.shared.unregister(identifier: identifier)
                         }
                         .onChange(of: geo.frame(in: .global)) { newFrame in
                             TTViewRegistry.shared.register(
