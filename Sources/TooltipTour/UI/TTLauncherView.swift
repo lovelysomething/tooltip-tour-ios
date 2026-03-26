@@ -84,17 +84,19 @@ final class TTLauncherState: ObservableObject {
             guard let config else { return }
             isReady = true
 
-            // New design: welcome card shows on every launch unless the user
-            // has previously tapped "Don't show again" (isDismissed).
-            // startMinimized skips the welcome card and goes straight to circle.
             if !isDismissed(config.id) {
                 if config.startMinimized {
-                    // Circle first; welcome card opens on first tap
+                    // Circle first; welcome card opens on first tap (checked in expandFab)
                     isMinimised = true
                     pendingAutoOpen = true
-                } else {
+                } else if !hasReachedMaxShows(config) {
+                    // Auto-open: count this show then display
+                    incrementShowCount(config.id)
                     try? await Task.sleep(nanoseconds: 800_000_000)
                     openWelcome()
+                } else {
+                    // Max auto-shows reached — sit as circle, still tappable
+                    isMinimised = true
                 }
             } else {
                 // Permanently dismissed — sit as circle until tapped
@@ -119,7 +121,13 @@ final class TTLauncherState: ObservableObject {
         withAnimation(.easeInOut(duration: 0.45)) { isMinimised = false }
         if pendingAutoOpen, let config, !isDismissed(config.id) {
             pendingAutoOpen = false
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.openWelcome() }
+            if !hasReachedMaxShows(config) {
+                incrementShowCount(config.id)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.openWelcome() }
+            } else {
+                // Max auto-shows reached: open welcome card as a manual interaction (no increment)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.openWelcome() }
+            }
         } else {
             openWelcome()
         }
@@ -149,5 +157,20 @@ final class TTLauncherState: ObservableObject {
 
     private func setDismissed(_ id: String) {
         UserDefaults.standard.set(true, forKey: "tt-dismissed-\(id)")
+    }
+
+    // MARK: - Show count (for max_shows limiting)
+
+    private func getShowCount(_ id: String) -> Int {
+        UserDefaults.standard.integer(forKey: "tt-shows-\(id)")
+    }
+
+    private func incrementShowCount(_ id: String) {
+        UserDefaults.standard.set(getShowCount(id) + 1, forKey: "tt-shows-\(id)")
+    }
+
+    private func hasReachedMaxShows(_ config: TTConfig) -> Bool {
+        guard let max = config.maxShows else { return false }
+        return getShowCount(config.id) >= max
     }
 }

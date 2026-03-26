@@ -10,6 +10,8 @@ public struct TTConfig: Codable {
     public let welcomeMessage: String?
     public let autoOpen: Bool
     public let startMinimized: Bool
+    /// Maximum number of times to auto-show the welcome card per device. nil = infinite.
+    public let maxShows: Int?
     public let steps: [TTStep]
     public let styles: TTStyles?
 }
