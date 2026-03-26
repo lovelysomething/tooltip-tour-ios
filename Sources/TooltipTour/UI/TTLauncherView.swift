@@ -100,17 +100,18 @@ final class TTLauncherState: ObservableObject {
 
     private var pendingAutoOpen = false
     private var hasLoaded       = false
-    /// The page this launcher was on when it first loaded.
+    /// The page this launcher is bound to.
     private var homePage: String? = nil
+    /// True when no ttPageIdentifier was injected — launcher follows page changes globally.
+    private var isGlobal        = false
 
     // MARK: - Load
 
     func load(page: String?) {
         guard !hasLoaded else { return }
         hasLoaded = true
-        // Prefer the environment-injected page (set before onAppear, no timing race).
-        // Fall back to TTPageRegistry.currentPage for apps not using .ttPage().
-        homePage = page ?? TTPageRegistry.shared.currentPage
+        isGlobal  = (page == nil)
+        homePage  = page ?? TTPageRegistry.shared.currentPage
         if homePage != nil {
             fetchAndShow()
         }
@@ -121,23 +122,32 @@ final class TTLauncherState: ObservableObject {
     // MARK: - Page change (called from onChange while view is still visible)
 
     func handlePageChange(_ newPage: String?) {
-        // First non-nil page we see is our home page
-        if homePage == nil, let newPage {
-            homePage = newPage
-            isOnScreen = true
-            fetchAndShow()   // now we know the page — fetch with it
-            return
-        }
-
-        guard let myPage = homePage else { return }
-
-        if newPage == myPage {
-            // Returning to our page — slide in
-            isOnScreen = true
-        } else {
-            // Leaving our page — slide off and close welcome card
+        if isGlobal {
+            // Global launcher: re-fetch for every new page, show if a tour exists.
+            guard let newPage else { isOnScreen = false; return }
+            guard newPage != homePage else { return }
+            homePage    = newPage
+            config      = nil
+            isReady     = false
             isOnScreen  = false
+            isMinimised = false
             showWelcome = false
+            fetchAndShow()
+        } else {
+            // Per-page launcher: slide in/out based on homePage.
+            if homePage == nil, let newPage {
+                homePage = newPage
+                isOnScreen = true
+                fetchAndShow()
+                return
+            }
+            guard let myPage = homePage else { return }
+            if newPage == myPage {
+                isOnScreen = true
+            } else {
+                isOnScreen  = false
+                showWelcome = false
+            }
         }
     }
 
@@ -148,7 +158,8 @@ final class TTLauncherState: ObservableObject {
         Task {
             config = await TooltipTour.shared.loadConfig(page: page)
             guard let config else { return }
-            isReady = true
+            isReady    = true
+            isOnScreen = true   // make visible once we know a tour exists
 
             if !isDismissed(config.id) {
                 if config.startMinimized {
