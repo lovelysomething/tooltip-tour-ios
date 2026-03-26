@@ -7,8 +7,13 @@ final class TTNetworkClient {
         self.baseURL = baseURL
     }
 
-    func fetchConfig(siteKey: String) async throws -> TTConfig? {
-        guard let url = URL(string: "\(baseURL)/api/walkthrough/\(siteKey)") else { return nil }
+    func fetchConfig(siteKey: String, page: String? = nil) async throws -> TTConfig? {
+        var urlString = "\(baseURL)/api/walkthrough/\(siteKey)"
+        if let page = page, !page.isEmpty {
+            let encoded = page.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? page
+            urlString += "?page=\(encoded)"
+        }
+        guard let url = URL(string: urlString) else { return nil }
         let (data, response) = try await URLSession.shared.data(from: url)
         guard let http = response as? HTTPURLResponse else { return nil }
         // 204 = no active walkthrough, 402 = view limit reached

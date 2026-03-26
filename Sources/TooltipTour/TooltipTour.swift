@@ -39,9 +39,9 @@ public final class TooltipTour {
         self.tracker       = TTEventTracker(baseURL: baseURL)
     }
 
-    /// Fetch the walkthrough config. Used by TTLauncherView.
-    public func loadConfig() async -> TTConfig? {
-        try? await networkClient?.fetchConfig(siteKey: siteKey)
+    /// Fetch the walkthrough config for the given page identifier. Used by TTLauncherView.
+    public func loadConfig(page: String? = nil) async -> TTConfig? {
+        try? await networkClient?.fetchConfig(siteKey: siteKey, page: page)
     }
 
     /// Called by TTLauncherState after the session ends so the launcher can show the minimised circle.

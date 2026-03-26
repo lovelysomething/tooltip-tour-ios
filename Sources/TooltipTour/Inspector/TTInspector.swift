@@ -188,11 +188,11 @@ final class TTInspector {
         modeSegment?.selectedSegmentIndex = index
 
         switch index {
-        case 1: // Highlight — show target chips AND intercept taps
+        case 1: // Highlight — show target chips; taps handled by highlightContainer
             overlayWindow?.isNavigating = false
+            tapView?.isUserInteractionEnabled = false
+            tapView?.backgroundColor = .clear
             guard state.phase == .tapping else { return }
-            tapView?.isUserInteractionEnabled = true
-            tapView?.backgroundColor = UIColor(red: 0, green: 0, blue: 1, alpha: 0.04)
             startHighlighting()
 
         case 2: // Select — intercept next tap
@@ -218,12 +218,16 @@ final class TTInspector {
 
         let container = UIView()
         container.backgroundColor = .clear
-        container.isUserInteractionEnabled = false
+        container.isUserInteractionEnabled = true   // receives taps in Highlight mode
         container.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         container.frame = rootView.bounds
         // Insert below the banner (which is the last subview) so chips don't cover it
         rootView.insertSubview(container, at: 0)
         highlightContainer = container
+
+        // Tap recognizer on the container — fires for any tap in the content area
+        let tap = UITapGestureRecognizer(target: self, action: #selector(highlightContainerTapped(_:)))
+        container.addGestureRecognizer(tap)
 
         refreshHighlightChips()
         highlightTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
@@ -309,6 +313,11 @@ final class TTInspector {
         tapView?.isUserInteractionEnabled = false
         tapView?.backgroundColor = .clear
         hostingController?.view.isUserInteractionEnabled = true
+    }
+
+    @objc private func highlightContainerTapped(_ gr: UITapGestureRecognizer) {
+        guard let window = overlayWindow else { return }
+        handleTap(at: gr.location(in: gr.view), in: window)
     }
 
     // MARK: - Page capture

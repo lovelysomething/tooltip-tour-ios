@@ -105,10 +105,44 @@ final class TTLauncherState: ObservableObject {
     func load() {
         guard !hasLoaded else { return }
         hasLoaded = true
-        // Remember which page we belong to
         homePage = TTPageRegistry.shared.currentPage
+        if homePage != nil {
+            // Page already known — fetch immediately
+            fetchAndShow()
+        }
+        // If homePage is nil (.ttPage() fires after onAppear), handlePageChange
+        // will provide the page and trigger fetchAndShow at that point.
+    }
+
+    // MARK: - Page change (called from onChange while view is still visible)
+
+    func handlePageChange(_ newPage: String?) {
+        // First non-nil page we see is our home page
+        if homePage == nil, let newPage {
+            homePage = newPage
+            isOnScreen = true
+            fetchAndShow()   // now we know the page — fetch with it
+            return
+        }
+
+        guard let myPage = homePage else { return }
+
+        if newPage == myPage {
+            // Returning to our page — slide in
+            isOnScreen = true
+        } else {
+            // Leaving our page — slide off and close welcome card
+            isOnScreen  = false
+            showWelcome = false
+        }
+    }
+
+    // MARK: - Config fetch
+
+    private func fetchAndShow() {
+        let page = homePage   // capture before entering Task
         Task {
-            config = await TooltipTour.shared.loadConfig()
+            config = await TooltipTour.shared.loadConfig(page: page)
             guard let config else { return }
             isReady = true
 
@@ -126,29 +160,6 @@ final class TTLauncherState: ObservableObject {
             } else {
                 isMinimised = true
             }
-        }
-    }
-
-    // MARK: - Page change (called from onChange while view is still visible)
-
-    func handlePageChange(_ newPage: String?) {
-        // First non-nil page we see is our home page (handles the case where
-        // .ttPage() fires after load() in the SwiftUI onAppear ordering)
-        if homePage == nil, let newPage {
-            homePage = newPage
-            isOnScreen = true
-            return
-        }
-
-        guard let myPage = homePage else { return }
-
-        if newPage == myPage {
-            // Returning to our page — slide in
-            isOnScreen = true
-        } else {
-            // Leaving our page — slide off and close welcome card
-            isOnScreen  = false
-            showWelcome = false
         }
     }
 
