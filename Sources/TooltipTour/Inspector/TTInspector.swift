@@ -14,8 +14,10 @@ final class TTInspector {
     private var overlayWindow: TTInspectorWindow?
     private var tapView: TTTapInterceptorView?
     private var hostingController: UIHostingController<AnyView>?
-    private var closeButton: UIButton?          // UIKit button for banner ✕
-    private var modeSegment: UISegmentedControl? // Navigate / Select toggle
+    private var closeButton: UIButton?           // UIKit button for banner ✕
+    private var modeSegment: UISegmentedControl? // Navigate / Highlight / Select toggle
+    private var highlightContainer: UIView?      // holds per-element highlight chips
+    private var highlightTimer: Timer?           // refreshes chip positions while scrolling
 
     private let state = TTInspectorState()
 
@@ -86,7 +88,7 @@ final class TTInspector {
         pill.translatesAutoresizingMaskIntoConstraints = false
 
         // Navigate | Select segmented control
-        let seg = UISegmentedControl(items: ["Navigate", "Select"])
+        let seg = UISegmentedControl(items: ["Navigate", "Highlight", "Select"])
         seg.selectedSegmentIndex = 0   // start in Navigate mode
         seg.translatesAutoresizingMaskIntoConstraints = false
         seg.backgroundColor = UIColor.white.withAlphaComponent(0.15)
@@ -132,25 +134,120 @@ final class TTInspector {
         modeSegment = seg
     }
 
-    // MARK: - Navigate / Select mode
+    // MARK: - Navigate / Highlight / Select mode
 
     @objc private func modeChanged(_ seg: UISegmentedControl) {
-        setNavigating(seg.selectedSegmentIndex == 0)
+        setMode(seg.selectedSegmentIndex)
     }
 
-    private func setNavigating(_ navigating: Bool) {
-        overlayWindow?.isNavigating = navigating
-        modeSegment?.selectedSegmentIndex = navigating ? 0 : 1
+    /// 0 = Navigate, 1 = Highlight, 2 = Select
+    private func setMode(_ index: Int) {
+        modeSegment?.selectedSegmentIndex = index
 
-        if navigating {
-            // Navigate: all touches fall through to the app (scroll, tap, swipe, etc.)
+        switch index {
+        case 1: // Highlight — touches still fall through, show target chips
+            overlayWindow?.isNavigating = true
             tapView?.isUserInteractionEnabled = false
             tapView?.backgroundColor = .clear
-        } else {
-            // Select: intercept next tap to capture an element
+            startHighlighting()
+
+        case 2: // Select — intercept next tap
+            overlayWindow?.isNavigating = false
+            stopHighlighting()
             guard state.phase == .tapping else { return }
             tapView?.isUserInteractionEnabled = true
             tapView?.backgroundColor = UIColor(red: 0, green: 0, blue: 1, alpha: 0.04)
+
+        default: // 0 = Navigate
+            overlayWindow?.isNavigating = true
+            stopHighlighting()
+            tapView?.isUserInteractionEnabled = false
+            tapView?.backgroundColor = .clear
+        }
+    }
+
+    // MARK: - Highlight overlay
+
+    private func startHighlighting() {
+        guard highlightContainer == nil,
+              let rootView = overlayWindow?.rootViewController?.view else { return }
+
+        let container = UIView()
+        container.backgroundColor = .clear
+        container.isUserInteractionEnabled = false
+        container.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        container.frame = rootView.bounds
+        // Insert below the banner (which is the last subview) so chips don't cover it
+        rootView.insertSubview(container, at: 0)
+        highlightContainer = container
+
+        refreshHighlightChips()
+        highlightTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.refreshHighlightChips() }
+        }
+    }
+
+    private func stopHighlighting() {
+        highlightTimer?.invalidate()
+        highlightTimer = nil
+        highlightContainer?.removeFromSuperview()
+        highlightContainer = nil
+    }
+
+    private func refreshHighlightChips() {
+        guard let container = highlightContainer else { return }
+        container.subviews.forEach { $0.removeFromSuperview() }
+
+        let allFrames = TTViewRegistry.shared.allFrames
+        guard !allFrames.isEmpty else {
+            // Show a hint when nothing is registered
+            let hint = UILabel()
+            hint.text = "No .ttTarget() views found"
+            hint.font = .systemFont(ofSize: 13, weight: .semibold)
+            hint.textColor = UIColor.white.withAlphaComponent(0.85)
+            hint.backgroundColor = UIColor.black.withAlphaComponent(0.55)
+            hint.textAlignment = .center
+            hint.layer.cornerRadius = 8
+            hint.layer.masksToBounds = true
+            hint.sizeToFit()
+            hint.frame = CGRect(
+                x: (container.bounds.width - hint.frame.width - 24) / 2,
+                y: container.bounds.midY - 20,
+                width: hint.frame.width + 24,
+                height: hint.frame.height + 12
+            )
+            hint.isUserInteractionEnabled = false
+            container.addSubview(hint)
+            return
+        }
+
+        for (id, frame) in allFrames {
+            guard !frame.isEmpty, frame.width > 0, frame.height > 0 else { continue }
+
+            // Chip border + fill
+            let chip = UIView(frame: frame)
+            chip.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.12)
+            chip.layer.borderColor = UIColor.systemBlue.withAlphaComponent(0.6).cgColor
+            chip.layer.borderWidth = 2
+            chip.layer.cornerRadius = 4
+            chip.isUserInteractionEnabled = false
+            container.addSubview(chip)
+
+            // Identifier label badge
+            let badge = UILabel()
+            badge.text = id
+            badge.font = .systemFont(ofSize: 10, weight: .bold)
+            badge.textColor = .white
+            badge.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.8)
+            badge.layer.cornerRadius = 3
+            badge.layer.masksToBounds = true
+            badge.textAlignment = .center
+            badge.sizeToFit()
+            let badgeW = min(badge.frame.width + 10, frame.width - 4)
+            let badgeH = badge.frame.height + 4
+            badge.frame = CGRect(x: 4, y: 4, width: badgeW, height: badgeH)
+            badge.isUserInteractionEnabled = false
+            chip.addSubview(badge)
         }
     }
 
@@ -174,8 +271,8 @@ final class TTInspector {
         state.captured = nil
         state.phase = .tapping
         hostingController?.view.isUserInteractionEnabled = false
-        // Return to Navigate so the user can scroll to a different element before re-selecting
-        setNavigating(true)
+        // Return to Navigate so the user can scroll/highlight before re-selecting
+        setMode(0)
     }
 
     // MARK: - Element identification
@@ -305,6 +402,7 @@ final class TTInspector {
     @objc private func cancelTapped() { tearDown() }
 
     private func tearDown() {
+        stopHighlighting()
         UIView.animate(withDuration: 0.25, animations: {
             self.overlayWindow?.alpha = 0
         }, completion: { _ in

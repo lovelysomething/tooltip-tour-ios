@@ -8,6 +8,9 @@ public final class TTViewRegistry {
     public static let shared = TTViewRegistry()
     private var frames: [String: CGRect] = [:]
 
+    /// All currently registered identifier → frame pairs (global/screen coordinates).
+    var allFrames: [String: CGRect] { frames }
+
     private init() {}
 
     func register(identifier: String, frame: CGRect) {
