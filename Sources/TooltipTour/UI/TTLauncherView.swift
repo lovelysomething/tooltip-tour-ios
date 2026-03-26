@@ -5,6 +5,9 @@ public struct TTLauncherView: View {
     @StateObject private var state = TTLauncherState()
     /// Subscribe to page changes so we can react while still on-screen
     @ObservedObject private var pageRegistry = TTPageRegistry.shared
+    /// Reads the page identifier injected by the nearest .ttPage() ancestor.
+    /// Available before onAppear, so no tab-switching timing races.
+    @Environment(\.ttPageIdentifier) private var ttPageIdentifier
     public init() {}
 
     public var body: some View {
@@ -41,7 +44,7 @@ public struct TTLauncherView: View {
         .ignoresSafeArea()
         .animation(.easeOut(duration: 0.25), value: state.showWelcome)
         .animation(.easeInOut(duration: 0.35), value: state.isOnScreen)
-        .onAppear { state.load() }
+        .onAppear { state.load(page: ttPageIdentifier) }
         // React to page changes while this view is still visible —
         // fires BEFORE the tab transition, unlike onDisappear.
         .onChange(of: pageRegistry.currentPage) { newPage in
@@ -102,16 +105,17 @@ final class TTLauncherState: ObservableObject {
 
     // MARK: - Load
 
-    func load() {
+    func load(page: String?) {
         guard !hasLoaded else { return }
         hasLoaded = true
-        homePage = TTPageRegistry.shared.currentPage
+        // Prefer the environment-injected page (set before onAppear, no timing race).
+        // Fall back to TTPageRegistry.currentPage for apps not using .ttPage().
+        homePage = page ?? TTPageRegistry.shared.currentPage
         if homePage != nil {
-            // Page already known — fetch immediately
             fetchAndShow()
         }
-        // If homePage is nil (.ttPage() fires after onAppear), handlePageChange
-        // will provide the page and trigger fetchAndShow at that point.
+        // If homePage is still nil, handlePageChange will call fetchAndShow
+        // once the first page identifier arrives via onChange.
     }
 
     // MARK: - Page change (called from onChange while view is still visible)

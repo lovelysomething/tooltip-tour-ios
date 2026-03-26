@@ -26,12 +26,26 @@ public final class TTPageRegistry: ObservableObject {
     }
 }
 
+// MARK: - Environment key so TTLauncherView can read its page without timing races
+
+private struct TTPageEnvironmentKey: EnvironmentKey {
+    static let defaultValue: String? = nil
+}
+
+extension EnvironmentValues {
+    var ttPageIdentifier: String? {
+        get { self[TTPageEnvironmentKey.self] }
+        set { self[TTPageEnvironmentKey.self] = newValue }
+    }
+}
+
 /// View modifier that registers the current screen identifier with TTPageRegistry.
 public struct TTPage: ViewModifier {
     let identifier: String
 
     public func body(content: Content) -> some View {
         content
+            .environment(\.ttPageIdentifier, identifier)  // available before onAppear
             .onAppear  { TTPageRegistry.shared.setPage(identifier)   }
             .onDisappear { TTPageRegistry.shared.clearPage(identifier) }
     }
