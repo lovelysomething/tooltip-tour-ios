@@ -188,10 +188,11 @@ final class TTInspector {
         modeSegment?.selectedSegmentIndex = index
 
         switch index {
-        case 1: // Highlight — touches still fall through, show target chips
-            overlayWindow?.isNavigating = true
-            tapView?.isUserInteractionEnabled = false
-            tapView?.backgroundColor = .clear
+        case 1: // Highlight — show target chips AND intercept taps
+            overlayWindow?.isNavigating = false
+            guard state.phase == .tapping else { return }
+            tapView?.isUserInteractionEnabled = true
+            tapView?.backgroundColor = UIColor(red: 0, green: 0, blue: 1, alpha: 0.04)
             startHighlighting()
 
         case 2: // Select — intercept next tap
