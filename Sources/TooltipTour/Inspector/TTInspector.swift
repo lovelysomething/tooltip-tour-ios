@@ -590,7 +590,7 @@ struct TTInspectorOverlayView: View {
                 TTConfirmCard(
                     suggestedIdentifier: cap.identifier == "unknown" ? "" : cap.identifier,
                     isDone: state.phase == .done,
-                    subtitle: mode == .page ? "Name this page" : "Name this element",
+                    subtitle: mode == .page ? "Page identified as" : "Name this element",
                     onRetry: onRetry,
                     onAccept: onAccept
                 )
