@@ -3,6 +3,8 @@ import UIKit
 
 public struct TTLauncherView: View {
     @StateObject private var state = TTLauncherState()
+    /// Subscribe to page changes so we can react while still on-screen
+    @ObservedObject private var pageRegistry = TTPageRegistry.shared
     public init() {}
 
     public var body: some View {
@@ -17,27 +19,34 @@ public struct TTLauncherView: View {
                     .onTapGesture { state.minimise() }
             }
 
-            if state.isReady && state.isOnScreen, let config = state.config {
+            if state.isReady, let config = state.config {
                 let alignRight = (config.styles?.fab?.position ?? "right") != "left"
 
-                if state.isMinimised {
-                    minimisedCircle(config: config, alignRight: alignRight)
-                        .transition(.move(edge: alignRight ? .trailing : .leading))
-                } else if state.showWelcome {
-                    TTWelcomeCardView(
-                        config: config,
-                        onStart:          { state.startGuide() },
-                        onDismiss:        { state.minimise() },
-                        onDontShowAgain:  { state.dontShowAgain() }
-                    )
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                if state.isOnScreen {
+                    if state.isMinimised {
+                        minimisedCircle(config: config, alignRight: alignRight)
+                            .transition(.move(edge: alignRight ? .trailing : .leading))
+                    } else if state.showWelcome {
+                        TTWelcomeCardView(
+                            config: config,
+                            onStart:          { state.startGuide() },
+                            onDismiss:        { state.minimise() },
+                            onDontShowAgain:  { state.dontShowAgain() }
+                        )
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
             }
         }
         .ignoresSafeArea()
         .animation(.easeOut(duration: 0.25), value: state.showWelcome)
-        .onAppear  { state.appeared() }
-        .onDisappear { state.disappeared() }
+        .animation(.easeInOut(duration: 0.35), value: state.isOnScreen)
+        .onAppear { state.load() }
+        // React to page changes while this view is still visible —
+        // fires BEFORE the tab transition, unlike onDisappear.
+        .onChange(of: pageRegistry.currentPage) { newPage in
+            state.handlePageChange(newPage)
+        }
     }
 
     // MARK: - Minimised circle
@@ -84,31 +93,20 @@ final class TTLauncherState: ObservableObject {
     @Published var isReady      = false
     @Published var isMinimised  = false
     @Published var showWelcome  = false
-    @Published var isOnScreen   = true   // false while the tab is off-screen
+    @Published var isOnScreen   = true
 
     private var pendingAutoOpen = false
     private var hasLoaded       = false
+    /// The page this launcher was on when it first loaded.
+    private var homePage: String? = nil
 
-    // MARK: - Appear / disappear (tab switching)
-
-    func appeared() {
-        guard hasLoaded else { load(); return }
-        // Returning to this tab — slide the circle back in
-        withAnimation(.easeInOut(duration: 0.45)) { isOnScreen = true }
-    }
-
-    func disappeared() {
-        // Leaving this tab — slide the circle off screen instantly (no lag)
-        withAnimation(.easeInOut(duration: 0.3)) {
-            isOnScreen   = false
-            showWelcome  = false
-        }
-    }
-
-    // MARK: - Initial load
+    // MARK: - Load
 
     func load() {
+        guard !hasLoaded else { return }
         hasLoaded = true
+        // Remember which page we belong to
+        homePage = TTPageRegistry.shared.currentPage
         Task {
             config = await TooltipTour.shared.loadConfig()
             guard let config else { return }
@@ -131,10 +129,26 @@ final class TTLauncherState: ObservableObject {
         }
     }
 
+    // MARK: - Page change (called from onChange while view is still visible)
+
+    func handlePageChange(_ newPage: String?) {
+        guard isReady else { return }
+        let onHomePage = (homePage == nil) || (newPage == homePage)
+        if onHomePage {
+            // Returning to our page — slide in
+            isOnScreen = true
+        } else {
+            // Leaving our page — slide off and close welcome card
+            isOnScreen  = false
+            showWelcome = false
+        }
+    }
+
+    // MARK: - Welcome card
+
     func openWelcome()  { withAnimation(.easeOut(duration: 0.28)) { showWelcome = true } }
     func closeWelcome() { withAnimation(.easeOut(duration: 0.22)) { showWelcome = false } }
 
-    /// X or dim overlay tapped → slide card down, slide circle in from edge
     func minimise() {
         withAnimation(.easeInOut(duration: 0.5)) {
             showWelcome = false
@@ -142,7 +156,6 @@ final class TTLauncherState: ObservableObject {
         }
     }
 
-    /// Tapped the minimised circle → slide circle out, show welcome card
     func expandFab() {
         withAnimation(.easeInOut(duration: 0.45)) { isMinimised = false }
         if pendingAutoOpen, let config, !isDismissed(config.id) {
@@ -164,7 +177,6 @@ final class TTLauncherState: ObservableObject {
         TooltipTour.shared.startSession(config: config)
     }
 
-    /// "Don't show again" → dismiss permanently
     func dontShowAgain() {
         guard let config else { return }
         setDismissed(config.id)

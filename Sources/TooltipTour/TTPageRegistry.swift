@@ -3,11 +3,11 @@ import SwiftUI
 /// Tracks which screen the user is currently viewing.
 /// Populated automatically by the `.ttPage()` view modifier.
 @MainActor
-public final class TTPageRegistry {
+public final class TTPageRegistry: ObservableObject {
     public static let shared = TTPageRegistry()
 
     /// The identifier of the most recently appeared screen.
-    private(set) public var currentPage: String?
+    @Published private(set) public var currentPage: String?
 
     // Stack so nested/overlaid views resolve correctly on disappear.
     private var pageStack: [String] = []
