@@ -20,10 +20,12 @@ final class TTInspector {
     private var highlightTimer: Timer?           // refreshes chip positions while scrolling
 
     private let state = TTInspectorState()
+    private let mode: TTInspectorMode
 
-    init(sessionId: String, networkClient: TTNetworkClient) {
+    init(sessionId: String, networkClient: TTNetworkClient, mode: TTInspectorMode = .element) {
         self.sessionId     = sessionId
         self.networkClient = networkClient
+        self.mode          = mode
     }
 
     // MARK: - Start
@@ -87,20 +89,6 @@ final class TTInspector {
         pill.layer.shadowRadius = 10
         pill.translatesAutoresizingMaskIntoConstraints = false
 
-        // Navigate | Select segmented control
-        let seg = UISegmentedControl(items: ["Navigate", "Highlight", "Select"])
-        seg.selectedSegmentIndex = 0   // start in Navigate mode
-        seg.translatesAutoresizingMaskIntoConstraints = false
-        seg.backgroundColor = UIColor.white.withAlphaComponent(0.15)
-        seg.selectedSegmentTintColor = UIColor.white.withAlphaComponent(0.28)
-        seg.setTitleTextAttributes(
-            [.foregroundColor: UIColor.white.withAlphaComponent(0.6),
-             .font: UIFont.systemFont(ofSize: 12, weight: .semibold)], for: .normal)
-        seg.setTitleTextAttributes(
-            [.foregroundColor: UIColor.white,
-             .font: UIFont.systemFont(ofSize: 12, weight: .bold)], for: .selected)
-        seg.addTarget(self, action: #selector(modeChanged(_:)), for: .valueChanged)
-
         let close = UIButton(type: .system)
         close.setTitle("✕", for: .normal)
         close.setTitleColor(UIColor.white.withAlphaComponent(0.7), for: .normal)
@@ -108,30 +96,84 @@ final class TTInspector {
         close.translatesAutoresizingMaskIntoConstraints = false
         close.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
 
-        pill.addSubview(seg)
         pill.addSubview(close)
         parent.addSubview(pill)
 
-        NSLayoutConstraint.activate([
-            pill.topAnchor.constraint(equalTo: parent.safeAreaLayoutGuide.topAnchor, constant: 12),
-            pill.leadingAnchor.constraint(equalTo: parent.leadingAnchor, constant: 16),
-            pill.trailingAnchor.constraint(equalTo: parent.trailingAnchor, constant: -16),
-            pill.heightAnchor.constraint(equalToConstant: 48),
+        if mode == .page {
+            // Page mode: label + single "Capture this screen" button
+            let label = UILabel()
+            label.text = "Navigate to your screen"
+            label.font = .systemFont(ofSize: 13, weight: .semibold)
+            label.textColor = UIColor.white.withAlphaComponent(0.85)
+            label.translatesAutoresizingMaskIntoConstraints = false
 
-            seg.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 12),
-            seg.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
-            seg.trailingAnchor.constraint(equalTo: close.leadingAnchor, constant: -8),
-            seg.heightAnchor.constraint(equalToConstant: 32),
+            let captureBtn = UIButton(type: .system)
+            captureBtn.setTitle("Capture this screen", for: .normal)
+            captureBtn.setTitleColor(.white, for: .normal)
+            captureBtn.titleLabel?.font = .systemFont(ofSize: 12, weight: .bold)
+            captureBtn.backgroundColor = UIColor.white.withAlphaComponent(0.22)
+            captureBtn.layer.cornerRadius = 8
+            captureBtn.contentEdgeInsets = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
+            captureBtn.translatesAutoresizingMaskIntoConstraints = false
+            captureBtn.addTarget(self, action: #selector(capturePageTapped), for: .touchUpInside)
 
-            close.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -12),
-            close.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
-            close.widthAnchor.constraint(equalToConstant: 36),
-        ])
+            pill.addSubview(label)
+            pill.addSubview(captureBtn)
+
+            NSLayoutConstraint.activate([
+                pill.topAnchor.constraint(equalTo: parent.safeAreaLayoutGuide.topAnchor, constant: 12),
+                pill.leadingAnchor.constraint(equalTo: parent.leadingAnchor, constant: 16),
+                pill.trailingAnchor.constraint(equalTo: parent.trailingAnchor, constant: -16),
+                pill.heightAnchor.constraint(equalToConstant: 48),
+
+                label.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 16),
+                label.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
+
+                captureBtn.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 10),
+                captureBtn.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
+                captureBtn.trailingAnchor.constraint(equalTo: close.leadingAnchor, constant: -8),
+
+                close.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -12),
+                close.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
+                close.widthAnchor.constraint(equalToConstant: 36),
+            ])
+        } else {
+            // Element mode: Navigate | Highlight | Select segmented control
+            let seg = UISegmentedControl(items: ["Navigate", "Highlight", "Select"])
+            seg.selectedSegmentIndex = 0
+            seg.translatesAutoresizingMaskIntoConstraints = false
+            seg.backgroundColor = UIColor.white.withAlphaComponent(0.15)
+            seg.selectedSegmentTintColor = UIColor.white.withAlphaComponent(0.28)
+            seg.setTitleTextAttributes(
+                [.foregroundColor: UIColor.white.withAlphaComponent(0.6),
+                 .font: UIFont.systemFont(ofSize: 12, weight: .semibold)], for: .normal)
+            seg.setTitleTextAttributes(
+                [.foregroundColor: UIColor.white,
+                 .font: UIFont.systemFont(ofSize: 12, weight: .bold)], for: .selected)
+            seg.addTarget(self, action: #selector(modeChanged(_:)), for: .valueChanged)
+            pill.addSubview(seg)
+
+            NSLayoutConstraint.activate([
+                pill.topAnchor.constraint(equalTo: parent.safeAreaLayoutGuide.topAnchor, constant: 12),
+                pill.leadingAnchor.constraint(equalTo: parent.leadingAnchor, constant: 16),
+                pill.trailingAnchor.constraint(equalTo: parent.trailingAnchor, constant: -16),
+                pill.heightAnchor.constraint(equalToConstant: 48),
+
+                seg.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 12),
+                seg.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
+                seg.trailingAnchor.constraint(equalTo: close.leadingAnchor, constant: -8),
+                seg.heightAnchor.constraint(equalToConstant: 32),
+
+                close.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -12),
+                close.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
+                close.widthAnchor.constraint(equalToConstant: 36),
+            ])
+            modeSegment = seg
+        }
 
         pill.alpha = 0
         UIView.animate(withDuration: 0.3) { pill.alpha = 1 }
         closeButton = close
-        modeSegment = seg
     }
 
     // MARK: - Navigate / Highlight / Select mode
@@ -265,6 +307,64 @@ final class TTInspector {
         tapView?.isUserInteractionEnabled = false
         tapView?.backgroundColor = .clear
         hostingController?.view.isUserInteractionEnabled = true
+    }
+
+    // MARK: - Page capture
+
+    @objc private func capturePageTapped() {
+        guard state.phase == .tapping else { return }
+        let (id, name) = currentPageInfo()
+        state.captured = TTCapturedElement(identifier: id, displayName: name, isConfirmed: false)
+        state.phase = .confirming
+        hostingController?.view.isUserInteractionEnabled = true
+    }
+
+    /// Returns the (identifier, displayName) for the currently visible screen.
+    private func currentPageInfo() -> (String, String) {
+        guard let vc = topViewController() else { return ("screen", "Screen") }
+
+        // Use navigation title if available
+        if let title = vc.title ?? vc.navigationItem.title, !title.isEmpty {
+            let id = title.lowercased()
+                .replacingOccurrences(of: " ", with: "-")
+                .components(separatedBy: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-")).inverted)
+                .joined()
+            return (id, title)
+        }
+
+        // Fall back to class name, stripped of common suffixes
+        var name = String(describing: type(of: vc))
+        for suffix in ["ViewController", "Controller", "Screen", "View"] {
+            if name.hasSuffix(suffix) { name = String(name.dropLast(suffix.count)); break }
+        }
+        // Skip SwiftUI hosting controllers
+        if name.contains("Hosting") || name.hasPrefix("_UI") || name.isEmpty {
+            return ("screen", "Screen")
+        }
+        // CamelCase → kebab-case
+        var id = ""
+        for (i, char) in name.enumerated() {
+            if char.isUppercase && i > 0 { id += "-" }
+            id += char.lowercased()
+        }
+        return (id, name)
+    }
+
+    private func topViewController() -> UIViewController? {
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }),
+              let appWindow = scene.windows.first(where: { !($0 is TTInspectorWindow) })
+        else { return nil }
+        return findTop(appWindow.rootViewController)
+    }
+
+    private func findTop(_ vc: UIViewController?) -> UIViewController? {
+        guard let vc else { return nil }
+        if let nav = vc as? UINavigationController { return findTop(nav.topViewController) }
+        if let tab = vc as? UITabBarController     { return findTop(tab.selectedViewController) }
+        if let presented = vc.presentedViewController { return findTop(presented) }
+        return vc
     }
 
     private func retryCapture() {
@@ -411,6 +511,13 @@ final class TTInspector {
             self.onEnd?()
         })
     }
+}
+
+// MARK: - Inspector mode
+
+public enum TTInspectorMode {
+    case element  // Navigate / Highlight / Select — tap to capture a UI element
+    case page     // Navigate freely — tap "Capture this screen" to capture the current VC
 }
 
 // MARK: - State

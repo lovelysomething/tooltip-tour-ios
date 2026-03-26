@@ -79,14 +79,16 @@ public final class TooltipTour {
               let baseEncoded = components.queryItems?.first(where: { $0.name == "base" })?.value,
               let inspectorBase = baseEncoded.removingPercentEncoding ?? Optional(baseEncoded)
         else { return }
-        startInspector(sessionId: sessionId, baseURL: inspectorBase)
+        let mode: TTInspectorMode = components.queryItems?
+            .first(where: { $0.name == "mode" })?.value == "page" ? .page : .element
+        startInspector(sessionId: sessionId, baseURL: inspectorBase, mode: mode)
     }
 
     /// Start the visual inspector overlay for the given session.
-    public func startInspector(sessionId: String, baseURL: String) {
+    public func startInspector(sessionId: String, baseURL: String, mode: TTInspectorMode = .element) {
         guard activeInspector == nil else { return }
         let client = TTNetworkClient(baseURL: baseURL)
-        let inspector = TTInspector(sessionId: sessionId, networkClient: client)
+        let inspector = TTInspector(sessionId: sessionId, networkClient: client, mode: mode)
         inspector.onEnd = { [weak self] in
             self?.activeInspector = nil
         }
