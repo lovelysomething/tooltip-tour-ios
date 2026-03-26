@@ -9,7 +9,15 @@ public struct TTLauncherView: View {
         ZStack(alignment: .bottom) {
             Color.clear
 
-            if state.isReady, let config = state.config {
+            // Dim overlay — shown behind the welcome card so the user must interact with it
+            if state.showWelcome {
+                Color.black.opacity(0.45)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                    .onTapGesture { state.minimise() }
+            }
+
+            if state.isReady && state.isOnScreen, let config = state.config {
                 let alignRight = (config.styles?.fab?.position ?? "right") != "left"
 
                 if state.isMinimised {
@@ -27,7 +35,9 @@ public struct TTLauncherView: View {
             }
         }
         .ignoresSafeArea()
-        .onAppear { state.load() }
+        .animation(.easeOut(duration: 0.25), value: state.showWelcome)
+        .onAppear  { state.appeared() }
+        .onDisappear { state.disappeared() }
     }
 
     // MARK: - Minimised circle
@@ -48,7 +58,6 @@ public struct TTLauncherView: View {
                 }
                 .frame(width: 44, height: 44)
             }
-            // Shadow outside the button so it isn't clipped by the button frame
             .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 0)
 
             if !alignRight { Spacer() }
@@ -75,10 +84,31 @@ final class TTLauncherState: ObservableObject {
     @Published var isReady      = false
     @Published var isMinimised  = false
     @Published var showWelcome  = false
+    @Published var isOnScreen   = true   // false while the tab is off-screen
 
     private var pendingAutoOpen = false
+    private var hasLoaded       = false
+
+    // MARK: - Appear / disappear (tab switching)
+
+    func appeared() {
+        guard hasLoaded else { load(); return }
+        // Returning to this tab — slide the circle back in
+        withAnimation(.easeInOut(duration: 0.45)) { isOnScreen = true }
+    }
+
+    func disappeared() {
+        // Leaving this tab — slide the circle off screen instantly (no lag)
+        withAnimation(.easeInOut(duration: 0.3)) {
+            isOnScreen   = false
+            showWelcome  = false
+        }
+    }
+
+    // MARK: - Initial load
 
     func load() {
+        hasLoaded = true
         Task {
             config = await TooltipTour.shared.loadConfig()
             guard let config else { return }
@@ -86,20 +116,16 @@ final class TTLauncherState: ObservableObject {
 
             if !isDismissed(config.id) {
                 if config.startMinimized {
-                    // Circle first; welcome card opens on first tap (checked in expandFab)
                     isMinimised = true
                     pendingAutoOpen = true
                 } else if !hasReachedMaxShows(config) {
-                    // Auto-open: count this show then display
                     incrementShowCount(config.id)
                     try? await Task.sleep(nanoseconds: 800_000_000)
                     openWelcome()
                 } else {
-                    // Max auto-shows reached — sit as circle, still tappable
                     isMinimised = true
                 }
             } else {
-                // Permanently dismissed — sit as circle until tapped
                 isMinimised = true
             }
         }
@@ -108,7 +134,7 @@ final class TTLauncherState: ObservableObject {
     func openWelcome()  { withAnimation(.easeOut(duration: 0.28)) { showWelcome = true } }
     func closeWelcome() { withAnimation(.easeOut(duration: 0.22)) { showWelcome = false } }
 
-    /// X tapped on welcome card → slide card down, slide circle in from edge
+    /// X or dim overlay tapped → slide card down, slide circle in from edge
     func minimise() {
         withAnimation(.easeInOut(duration: 0.5)) {
             showWelcome = false
@@ -121,13 +147,8 @@ final class TTLauncherState: ObservableObject {
         withAnimation(.easeInOut(duration: 0.45)) { isMinimised = false }
         if pendingAutoOpen, let config, !isDismissed(config.id) {
             pendingAutoOpen = false
-            if !hasReachedMaxShows(config) {
-                incrementShowCount(config.id)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.openWelcome() }
-            } else {
-                // Max auto-shows reached: open welcome card as a manual interaction (no increment)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.openWelcome() }
-            }
+            if !hasReachedMaxShows(config) { incrementShowCount(config.id) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.openWelcome() }
         } else {
             openWelcome()
         }
@@ -136,7 +157,6 @@ final class TTLauncherState: ObservableObject {
     func startGuide() {
         closeWelcome()
         guard let config else { return }
-        // When the session ends (Finish or dismiss) → slide the circle back in from edge
         TooltipTour.shared.onSessionEnd = { [weak self] in
             guard let self else { return }
             withAnimation(.easeInOut(duration: 0.5)) { self.isMinimised = true }
@@ -151,6 +171,8 @@ final class TTLauncherState: ObservableObject {
         withAnimation(.easeOut(duration: 0.22)) { showWelcome = false }
     }
 
+    // MARK: - Dismiss persistence
+
     func isDismissed(_ id: String) -> Bool {
         UserDefaults.standard.bool(forKey: "tt-dismissed-\(id)")
     }
@@ -159,7 +181,7 @@ final class TTLauncherState: ObservableObject {
         UserDefaults.standard.set(true, forKey: "tt-dismissed-\(id)")
     }
 
-    // MARK: - Show count (for max_shows limiting)
+    // MARK: - Show count (max_shows)
 
     private func getShowCount(_ id: String) -> Int {
         UserDefaults.standard.integer(forKey: "tt-shows-\(id)")
