@@ -104,6 +104,8 @@ final class TTLauncherState: ObservableObject {
     private var homePage: String? = nil
     /// True when no ttPageIdentifier was injected — launcher follows page changes globally.
     private var isGlobal        = false
+    /// Tour IDs the user has manually minimised this session — won't auto-open until they tap the circle.
+    private var sessionMinimised: Set<String> = []
 
     // MARK: - Load
 
@@ -162,7 +164,10 @@ final class TTLauncherState: ObservableObject {
             isOnScreen = true   // make visible once we know a tour exists
 
             if !isDismissed(config.id) {
-                if config.startMinimized {
+                if sessionMinimised.contains(config.id) {
+                    // User manually closed this tour earlier this session — keep it minimised.
+                    isMinimised = true
+                } else if config.startMinimized {
                     isMinimised = true
                     pendingAutoOpen = true
                 } else if !hasReachedMaxShows(config) {
@@ -184,6 +189,9 @@ final class TTLauncherState: ObservableObject {
     func closeWelcome() { withAnimation(.easeOut(duration: 0.22)) { showWelcome = false } }
 
     func minimise() {
+        // Remember that the user manually closed this tour so it stays minimised
+        // for the rest of the session (until they tap the circle again).
+        if let config { sessionMinimised.insert(config.id) }
         withAnimation(.easeInOut(duration: 0.5)) {
             showWelcome = false
             isMinimised = true
