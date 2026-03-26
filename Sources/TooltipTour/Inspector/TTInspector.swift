@@ -321,9 +321,15 @@ final class TTInspector {
 
     /// Returns the (identifier, displayName) for the currently visible screen.
     private func currentPageInfo() -> (String, String) {
+        // PRIMARY: .ttPage() modifier — most reliable for SwiftUI apps.
+        if let page = TTPageRegistry.shared.currentPage {
+            return (page, page)
+        }
+
+        // FALLBACK: UIViewController introspection (works for UIKit apps).
         guard let vc = topViewController() else { return ("screen", "Screen") }
 
-        // Use navigation title if available
+        // Use navigation/tab title if set
         if let title = vc.title ?? vc.navigationItem.title, !title.isEmpty {
             let id = title.lowercased()
                 .replacingOccurrences(of: " ", with: "-")
@@ -332,14 +338,14 @@ final class TTInspector {
             return (id, title)
         }
 
-        // Fall back to class name, stripped of common suffixes
+        // Class name, stripped of common suffixes
         var name = String(describing: type(of: vc))
         for suffix in ["ViewController", "Controller", "Screen", "View"] {
             if name.hasSuffix(suffix) { name = String(name.dropLast(suffix.count)); break }
         }
-        // Skip SwiftUI hosting controllers
+        // Skip SwiftUI hosting controllers — they always resolve to "screen"
         if name.contains("Hosting") || name.hasPrefix("_UI") || name.isEmpty {
-            return ("screen", "Screen")
+            return ("screen", "Screen — add .ttPage(\"identifier\") to your view")
         }
         // CamelCase → kebab-case
         var id = ""
