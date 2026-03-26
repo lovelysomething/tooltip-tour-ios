@@ -4,6 +4,8 @@ import UIKit
 
 public struct TTConfig: Codable {
     public let id: String
+    /// Only present in prefetch responses — the page identifier this tour is bound to.
+    public let pagePattern: String?
     public let fabLabel: String?
     public let welcomeEmoji: String?
     public let welcomeTitle: String?

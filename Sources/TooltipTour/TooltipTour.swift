@@ -25,6 +25,8 @@ public final class TooltipTour {
     private var tracker: TTEventTracker?
     private var activeSession: TTWalkthroughSession?
     private var activeInspector: TTInspector?
+    /// Shared cache populated by prefetchAll() or lazily by individual loadConfig() calls.
+    var configCache: [String: TTConfig] = [:]
 
     private init() {}
 
@@ -39,9 +41,20 @@ public final class TooltipTour {
         self.tracker       = TTEventTracker(baseURL: baseURL)
     }
 
+    /// Pre-fetch all tour configs for this site and cache them.
+    /// Call once at app startup (after configure) so every page loads instantly.
+    public func prefetchAll() async {
+        guard let fetched = try? await networkClient?.fetchAllConfigs(siteKey: siteKey) else { return }
+        configCache.merge(fetched) { _, new in new }
+    }
+
     /// Fetch the walkthrough config for the given page identifier. Used by TTLauncherView.
+    /// Checks the shared cache first so prefetchAll() results are used instantly.
     public func loadConfig(page: String? = nil) async -> TTConfig? {
-        try? await networkClient?.fetchConfig(siteKey: siteKey, page: page)
+        if let page, let cached = configCache[page] { return cached }
+        guard let config = try? await networkClient?.fetchConfig(siteKey: siteKey, page: page) else { return nil }
+        if let page { configCache[page] = config }
+        return config
     }
 
     /// Called by TTLauncherState after the session ends so the launcher can show the minimised circle.

@@ -106,8 +106,6 @@ final class TTLauncherState: ObservableObject {
     private var isGlobal        = false
     /// Tour IDs the user has manually minimised this session — won't auto-open until they tap the circle.
     private var sessionMinimised: Set<String> = []
-    /// In-memory cache: page identifier → config (avoids re-fetching when switching back to a page).
-    private var configCache: [String: TTConfig] = [:]
 
     // MARK: - Load
 
@@ -160,16 +158,8 @@ final class TTLauncherState: ObservableObject {
     private func fetchAndShow() {
         let page = homePage   // capture before entering Task
         Task {
-            // Use cache if available to avoid round-trip on tab switch back.
-            let fetched: TTConfig?
-            if let cached = page.flatMap({ configCache[$0] }) {
-                fetched = cached
-            } else {
-                fetched = await TooltipTour.shared.loadConfig(page: page)
-                if let fetched, let page { configCache[page] = fetched }
-            }
-            guard let config = fetched else { return }
-            self.config = config
+            guard let config = await TooltipTour.shared.loadConfig(page: page) else { return }
+            self.config  = config
             isReady    = true
             isOnScreen = true   // make visible once we know a tour exists
 
