@@ -212,8 +212,11 @@ final class TTLauncherState: ObservableObject {
     func startGuide() {
         closeWelcome()
         guard let config else { return }
+        let tourId = config.id
         TooltipTour.shared.onSessionEnd = { [weak self] in
             guard let self else { return }
+            // Mark as session-minimised so coming back to this page doesn't re-launch the welcome card.
+            self.sessionMinimised.insert(tourId)
             withAnimation(.easeInOut(duration: 0.5)) { self.isMinimised = true }
         }
         TooltipTour.shared.startSession(config: config)
