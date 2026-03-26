@@ -132,9 +132,17 @@ final class TTLauncherState: ObservableObject {
     // MARK: - Page change (called from onChange while view is still visible)
 
     func handlePageChange(_ newPage: String?) {
-        guard isReady else { return }
-        let onHomePage = (homePage == nil) || (newPage == homePage)
-        if onHomePage {
+        // First non-nil page we see is our home page (handles the case where
+        // .ttPage() fires after load() in the SwiftUI onAppear ordering)
+        if homePage == nil, let newPage {
+            homePage = newPage
+            isOnScreen = true
+            return
+        }
+
+        guard let myPage = homePage else { return }
+
+        if newPage == myPage {
             // Returning to our page — slide in
             isOnScreen = true
         } else {
