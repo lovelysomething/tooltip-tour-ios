@@ -762,7 +762,7 @@ struct TTConfirmCard: View {
                     Button {
                         if !identifier.isEmpty { onAccept(identifier) }
                     } label: {
-                        Text("Use this →")
+                        Text("Send to site →")
                             .font(.system(size: 11, weight: .bold))
                             .tracking(1.5)
                             .textCase(.uppercase)
