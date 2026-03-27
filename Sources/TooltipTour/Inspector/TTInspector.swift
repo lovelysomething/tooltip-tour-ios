@@ -83,7 +83,7 @@ final class TTInspector {
     private func addBanner(to parent: UIView) {
         let pill = UIView()
         pill.backgroundColor = UIColor(red: 0.098, green: 0.145, blue: 0.667, alpha: 1)
-        pill.layer.cornerRadius = 12
+        pill.layer.cornerRadius = 0
         pill.layer.shadowColor = UIColor.black.cgColor
         pill.layer.shadowOpacity = 0.25
         pill.layer.shadowOffset = CGSize(width: 0, height: 4)
@@ -113,7 +113,7 @@ final class TTInspector {
             captureBtn.setTitleColor(.white, for: .normal)
             captureBtn.titleLabel?.font = .systemFont(ofSize: 12, weight: .bold)
             captureBtn.backgroundColor = UIColor.white.withAlphaComponent(0.22)
-            captureBtn.layer.cornerRadius = 8
+            captureBtn.layer.cornerRadius = 0
             captureBtn.contentEdgeInsets = UIEdgeInsets(top: 6, left: 12, bottom: 6, right: 12)
             captureBtn.translatesAutoresizingMaskIntoConstraints = false
             captureBtn.addTarget(self, action: #selector(capturePageTapped), for: .touchUpInside)
@@ -255,7 +255,7 @@ final class TTInspector {
             hint.textColor = UIColor.white.withAlphaComponent(0.85)
             hint.backgroundColor = UIColor.black.withAlphaComponent(0.55)
             hint.textAlignment = .center
-            hint.layer.cornerRadius = 8
+            hint.layer.cornerRadius = 0
             hint.layer.masksToBounds = true
             hint.sizeToFit()
             hint.frame = CGRect(
@@ -277,7 +277,7 @@ final class TTInspector {
             chip.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.12)
             chip.layer.borderColor = UIColor.systemBlue.withAlphaComponent(0.6).cgColor
             chip.layer.borderWidth = 2
-            chip.layer.cornerRadius = 4
+            chip.layer.cornerRadius = 0
             chip.isUserInteractionEnabled = false
             container.addSubview(chip)
 
@@ -287,7 +287,7 @@ final class TTInspector {
             badge.font = .systemFont(ofSize: 10, weight: .bold)
             badge.textColor = .white
             badge.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.8)
-            badge.layer.cornerRadius = 3
+            badge.layer.cornerRadius = 0
             badge.layer.masksToBounds = true
             badge.textAlignment = .center
             badge.sizeToFit()
@@ -692,7 +692,7 @@ struct TTConfirmCard: View {
             }
         }
         .background(Color.white)
-        .cornerRadius(14)
+        .cornerRadius(0)
         .shadow(color: .black.opacity(0.18), radius: 24, x: 0, y: 8)
         .onAppear {
             identifier = suggestedIdentifier
