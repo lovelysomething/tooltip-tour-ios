@@ -106,6 +106,24 @@ final class TTLauncherState: ObservableObject {
     private var isGlobal        = false
     /// Tour IDs the user has manually minimised this session — won't auto-open until they tap the circle.
     private var sessionMinimised: Set<String> = []
+    private var inspectorObserver: Any?
+
+    init() {
+        // Minimise any visible tour card when the Visual Inspector launches.
+        inspectorObserver = NotificationCenter.default.addObserver(
+            forName: .ttInspectorDidStart, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            withAnimation(.easeInOut(duration: 0.3)) {
+                self.showWelcome = false
+                self.isMinimised = true
+            }
+        }
+    }
+
+    deinit {
+        if let obs = inspectorObserver { NotificationCenter.default.removeObserver(obs) }
+    }
 
     // MARK: - Load
 

@@ -1,5 +1,9 @@
 import UIKit
 
+extension Notification.Name {
+    static let ttInspectorDidStart = Notification.Name("com.tooltiptour.inspectorDidStart")
+}
+
 /// Main entry point for the Tooltip Tour iOS SDK.
 ///
 /// Setup (AppDelegate or @main):
@@ -113,6 +117,8 @@ public final class TooltipTour {
             self?.activeInspector = nil
         }
         activeInspector = inspector
+        // Tell any visible launchers to minimise so they don't overlap the inspector.
+        NotificationCenter.default.post(name: .ttInspectorDidStart, object: nil)
         inspector.start()
     }
 }
