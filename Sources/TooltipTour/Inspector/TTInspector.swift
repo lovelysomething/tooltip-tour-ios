@@ -145,6 +145,8 @@ final class TTInspector {
             seg.translatesAutoresizingMaskIntoConstraints = false
             seg.backgroundColor = UIColor.white.withAlphaComponent(0.15)
             seg.selectedSegmentTintColor = UIColor.white.withAlphaComponent(0.28)
+            seg.layer.cornerRadius = 0
+            seg.layer.masksToBounds = true
             seg.setTitleTextAttributes(
                 [.foregroundColor: UIColor.white.withAlphaComponent(0.6),
                  .font: UIFont.systemFont(ofSize: 12, weight: .semibold)], for: .normal)
@@ -216,18 +218,14 @@ final class TTInspector {
         guard highlightContainer == nil,
               let rootView = overlayWindow?.rootViewController?.view else { return }
 
-        let container = UIView()
+        let container = TTHighlightContainer()
         container.backgroundColor = .clear
-        container.isUserInteractionEnabled = true   // receives taps in Highlight mode
+        container.isUserInteractionEnabled = true
         container.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         container.frame = rootView.bounds
         // Insert below the banner (which is the last subview) so chips don't cover it
         rootView.insertSubview(container, at: 0)
         highlightContainer = container
-
-        // Tap recognizer on the container — fires for any tap in the content area
-        let tap = UITapGestureRecognizer(target: self, action: #selector(highlightContainerTapped(_:)))
-        container.addGestureRecognizer(tap)
 
         refreshHighlightChips()
         highlightTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
@@ -272,13 +270,16 @@ final class TTInspector {
         for (id, frame) in allFrames {
             guard !frame.isEmpty, frame.width > 0, frame.height > 0 else { continue }
 
-            // Chip border + fill
+            // Chip border + fill — tappable so touches on chips are captured while
+            // everything else falls through TTHighlightContainer to the app (scrolling works).
             let chip = UIView(frame: frame)
             chip.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.12)
             chip.layer.borderColor = UIColor.systemBlue.withAlphaComponent(0.6).cgColor
             chip.layer.borderWidth = 2
             chip.layer.cornerRadius = 0
-            chip.isUserInteractionEnabled = false
+            chip.isUserInteractionEnabled = true
+            let chipTap = UITapGestureRecognizer(target: self, action: #selector(chipTapped(_:)))
+            chip.addGestureRecognizer(chipTap)
             container.addSubview(chip)
 
             // Identifier label badge
@@ -315,9 +316,10 @@ final class TTInspector {
         hostingController?.view.isUserInteractionEnabled = true
     }
 
-    @objc private func highlightContainerTapped(_ gr: UITapGestureRecognizer) {
+    @objc private func chipTapped(_ gr: UITapGestureRecognizer) {
         guard let window = overlayWindow else { return }
-        handleTap(at: gr.location(in: gr.view), in: window)
+        // Use the chip's centre in window coords so identifyView finds the right element.
+        handleTap(at: gr.location(in: window), in: window)
     }
 
     // MARK: - Page capture
@@ -551,6 +553,18 @@ final class TTInspectorState: ObservableObject {
 
 // MARK: - TTInspectorWindow / TTTapInterceptorView
 
+// MARK: - Highlight container (pass-through hit testing)
+
+/// A UIView that only intercepts touches landing on interactive chip subviews.
+/// Anything that doesn't hit a chip returns nil so the touch falls through to the app,
+/// keeping scrolling alive in Highlight mode.
+final class TTHighlightContainer: UIView {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hit = super.hitTest(point, with: event)
+        return hit === self ? nil : hit
+    }
+}
+
 final class TTInspectorWindow: UIWindow {
     /// When true, touches that don't land on a real control (banner) fall through to the app.
     /// When false, the tap interceptor is active and all touches are captured.
@@ -558,11 +572,10 @@ final class TTInspectorWindow: UIWindow {
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let hit = super.hitTest(point, with: event)
-        guard isNavigating else { return hit }
-        // In navigate mode only intercept touches that hit a real control (banner pill etc.).
-        // If the result is just the transparent root background, return nil so UIKit
-        // routes the event to the next window (the app) — enabling free scroll/tap.
-        if hit == rootViewController?.view { return nil }
+        // If only the transparent root background was hit, pass through to the app.
+        // This keeps scrolling alive in all modes. TTHighlightContainer and the banner
+        // handle their own interactivity — real controls are always returned.
+        if hit == nil || hit == rootViewController?.view { return nil }
         return hit
     }
 }
@@ -593,21 +606,55 @@ struct TTInspectorOverlayView: View {
     let onRetry: () -> Void
     let onAccept: (String) -> Void   // passes the final (possibly edited) identifier
 
+    @State private var cardOffsetY: CGFloat = 0
+    @State private var dragOffsetY: CGFloat = 0
+
+    private let brandBlue = Color(red: 0.098, green: 0.145, blue: 0.667)
+
     var body: some View {
         ZStack(alignment: .bottom) {
             Color.clear
             if (state.phase == .confirming || state.phase == .done), let cap = state.captured {
-                TTConfirmCard(
-                    suggestedIdentifier: cap.identifier == "unknown" ? "" : cap.identifier,
-                    isDone: state.phase == .done,
-                    subtitle: mode == .page ? "Page identified as" : "Name this element",
-                    onRetry: onRetry,
-                    onAccept: onAccept
-                )
+                HStack(alignment: .top, spacing: 0) {
+                    // ── Drag handle ───────────────────────────────────────────
+                    brandBlue
+                        .frame(width: 36)
+                        .overlay(
+                            Image(systemName: "arrow.up.and.down")
+                                .foregroundColor(.white.opacity(0.8))
+                                .font(.system(size: 13, weight: .semibold))
+                        )
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    dragOffsetY = value.translation.height
+                                }
+                                .onEnded { value in
+                                    let newOffset = cardOffsetY + value.translation.height
+                                    // Clamp: don't drag above top of screen or below start
+                                    cardOffsetY = min(max(newOffset, -500), 100)
+                                    dragOffsetY = 0
+                                }
+                        )
+
+                    // ── Confirm card ──────────────────────────────────────────
+                    TTConfirmCard(
+                        suggestedIdentifier: cap.identifier == "unknown" ? "" : cap.identifier,
+                        isDone: state.phase == .done,
+                        subtitle: mode == .page ? "Page identified as" : "Name this element",
+                        onRetry: onRetry,
+                        onAccept: onAccept
+                    )
+                }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 48)
+                .offset(y: cardOffsetY + dragOffsetY)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .animation(.spring(duration: 0.35), value: state.phase)
+                .onChange(of: state.phase) { _ in
+                    // Reset position when a new capture starts
+                    if state.phase == .tapping { cardOffsetY = 0; dragOffsetY = 0 }
+                }
             }
         }
     }
