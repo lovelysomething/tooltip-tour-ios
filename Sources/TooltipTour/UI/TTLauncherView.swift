@@ -158,6 +158,8 @@ final class TTLauncherState: ObservableObject {
     private func fetchAndShow() {
         let page = homePage   // capture before entering Task
         Task {
+            // Don't launch tours while the Visual Inspector is open.
+            guard !TooltipTour.shared.isInspectorActive else { return }
             guard let config = await TooltipTour.shared.loadConfig(page: page) else { return }
             self.config  = config
             isReady    = true

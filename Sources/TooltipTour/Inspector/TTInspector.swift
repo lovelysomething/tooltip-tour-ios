@@ -179,7 +179,14 @@ final class TTInspector {
             seg.setBackgroundImage(clear,    for: .normal,   barMetrics: .default)
             seg.setBackgroundImage(selected, for: .selected, barMetrics: .default)
             seg.setDividerImage(clear, forLeftSegmentState: .normal, rightSegmentState: .normal, barMetrics: .default)
-            seg.backgroundColor = UIColor.white.withAlphaComponent(0.15)
+            // Don't use seg.backgroundColor — it paints with the system's own corner radius.
+            // Use a plain UIView background behind the seg instead.
+            seg.backgroundColor = .clear
+            let segBg = UIView()
+            segBg.backgroundColor = UIColor.white.withAlphaComponent(0.15)
+            segBg.layer.cornerRadius = 0
+            segBg.translatesAutoresizingMaskIntoConstraints = false
+            pill.insertSubview(segBg, belowSubview: seg)
             seg.setTitleTextAttributes(
                 [.foregroundColor: UIColor.white.withAlphaComponent(0.6),
                  .font: UIFont.systemFont(ofSize: 12, weight: .semibold)], for: .normal)
@@ -204,6 +211,11 @@ final class TTInspector {
                 seg.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
                 seg.trailingAnchor.constraint(equalTo: close.leadingAnchor, constant: -8),
                 seg.heightAnchor.constraint(equalToConstant: 32),
+
+                segBg.leadingAnchor.constraint(equalTo: seg.leadingAnchor),
+                segBg.trailingAnchor.constraint(equalTo: seg.trailingAnchor),
+                segBg.topAnchor.constraint(equalTo: seg.topAnchor),
+                segBg.bottomAnchor.constraint(equalTo: seg.bottomAnchor),
 
                 close.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -12),
                 close.centerYAnchor.constraint(equalTo: pill.centerYAnchor),

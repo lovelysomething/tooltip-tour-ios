@@ -100,6 +100,10 @@ public final class TooltipTour {
         }
     }
 
+    /// True while the Visual Inspector is active — TTLauncherView checks this and
+    /// suppresses tour auto-launch so the inspector session isn't interrupted.
+    var isInspectorActive: Bool { activeInspector != nil }
+
     /// Start the visual inspector overlay for the given session.
     public func startInspector(sessionId: String, baseURL: String, mode: TTInspectorMode = .element) {
         guard activeInspector == nil else { return }
