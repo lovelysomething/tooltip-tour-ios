@@ -94,7 +94,10 @@ public final class TooltipTour {
         else { return }
         let mode: TTInspectorMode = components.queryItems?
             .first(where: { $0.name == "mode" })?.value == "page" ? .page : .element
-        startInspector(sessionId: sessionId, baseURL: inspectorBase, mode: mode)
+        // Delay slightly so the UIWindowScene reaches .foregroundActive when launching cold from a QR scan.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.startInspector(sessionId: sessionId, baseURL: inspectorBase, mode: mode)
+        }
     }
 
     /// Start the visual inspector overlay for the given session.
