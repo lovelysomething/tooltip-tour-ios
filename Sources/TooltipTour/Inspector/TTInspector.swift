@@ -163,10 +163,23 @@ final class TTInspector {
             let seg = UISegmentedControl(items: ["Navigate", "Highlight", "Select"])
             seg.selectedSegmentIndex = 0
             seg.translatesAutoresizingMaskIntoConstraints = false
-            seg.backgroundColor = UIColor.white.withAlphaComponent(0.15)
-            seg.selectedSegmentTintColor = UIColor.white.withAlphaComponent(0.28)
             seg.layer.cornerRadius = 0
             seg.layer.masksToBounds = true
+            // Replace default rounded background images with flat 1×1 pixel images
+            // so neither the control border nor the selected indicator have any rounding.
+            let render = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1))
+            let clear = render.image { ctx in
+                UIColor.clear.setFill()
+                ctx.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
+            }.resizableImage(withCapInsets: .zero)
+            let selected = render.image { ctx in
+                UIColor.white.withAlphaComponent(0.28).setFill()
+                ctx.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
+            }.resizableImage(withCapInsets: .zero)
+            seg.setBackgroundImage(clear,    for: .normal,   barMetrics: .default)
+            seg.setBackgroundImage(selected, for: .selected, barMetrics: .default)
+            seg.setDividerImage(clear, forLeftSegmentState: .normal, rightSegmentState: .normal, barMetrics: .default)
+            seg.backgroundColor = UIColor.white.withAlphaComponent(0.15)
             seg.setTitleTextAttributes(
                 [.foregroundColor: UIColor.white.withAlphaComponent(0.6),
                  .font: UIFont.systemFont(ofSize: 12, weight: .semibold)], for: .normal)
@@ -649,6 +662,14 @@ struct TTInspectorOverlayView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             Color.clear
+
+            if (state.phase == .confirming || state.phase == .done) {
+                Color.black.opacity(0.45)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.2), value: state.phase)
+            }
+
             if (state.phase == .confirming || state.phase == .done), let cap = state.captured {
                 TTConfirmCard(
                     suggestedIdentifier: cap.identifier == "unknown" ? "" : cap.identifier,
