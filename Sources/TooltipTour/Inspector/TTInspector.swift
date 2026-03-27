@@ -18,6 +18,7 @@ final class TTInspector {
     private var modeSegment: UISegmentedControl? // Navigate / Highlight / Select toggle
     private var highlightContainer: UIView?      // holds per-element highlight chips
     private var highlightTimer: Timer?           // refreshes chip positions while scrolling
+    private var bannerTopConstraint: NSLayoutConstraint? // updated when user drags banner
 
     private let state = TTInspectorState()
     private let mode: TTInspectorMode
@@ -90,6 +91,12 @@ final class TTInspector {
         pill.layer.shadowRadius = 10
         pill.translatesAutoresizingMaskIntoConstraints = false
 
+        // ↕ drag handle — leftmost element inside the bar
+        let dragIcon = UIImageView(image: UIImage(systemName: "arrow.up.and.down"))
+        dragIcon.tintColor = UIColor.white.withAlphaComponent(0.6)
+        dragIcon.contentMode = .scaleAspectFit
+        dragIcon.translatesAutoresizingMaskIntoConstraints = false
+
         let close = UIButton(type: .system)
         close.setTitle("✕", for: .normal)
         close.setTitleColor(UIColor.white.withAlphaComponent(0.7), for: .normal)
@@ -97,8 +104,16 @@ final class TTInspector {
         close.translatesAutoresizingMaskIntoConstraints = false
         close.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
 
+        pill.addSubview(dragIcon)
         pill.addSubview(close)
         parent.addSubview(pill)
+
+        // Pan gesture to drag the banner up/down
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(bannerPanned(_:)))
+        pill.addGestureRecognizer(pan)
+
+        let topC = pill.topAnchor.constraint(equalTo: parent.safeAreaLayoutGuide.topAnchor, constant: 12)
+        bannerTopConstraint = topC
 
         if mode == .page {
             // Page mode: label + single "Capture this screen" button
@@ -122,12 +137,17 @@ final class TTInspector {
             pill.addSubview(captureBtn)
 
             NSLayoutConstraint.activate([
-                pill.topAnchor.constraint(equalTo: parent.safeAreaLayoutGuide.topAnchor, constant: 12),
+                topC,
                 pill.leadingAnchor.constraint(equalTo: parent.leadingAnchor, constant: 16),
                 pill.trailingAnchor.constraint(equalTo: parent.trailingAnchor, constant: -16),
                 pill.heightAnchor.constraint(equalToConstant: 48),
 
-                label.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 16),
+                dragIcon.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 12),
+                dragIcon.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
+                dragIcon.widthAnchor.constraint(equalToConstant: 18),
+                dragIcon.heightAnchor.constraint(equalToConstant: 18),
+
+                label.leadingAnchor.constraint(equalTo: dragIcon.trailingAnchor, constant: 10),
                 label.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
 
                 captureBtn.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 10),
@@ -157,12 +177,17 @@ final class TTInspector {
             pill.addSubview(seg)
 
             NSLayoutConstraint.activate([
-                pill.topAnchor.constraint(equalTo: parent.safeAreaLayoutGuide.topAnchor, constant: 12),
+                topC,
                 pill.leadingAnchor.constraint(equalTo: parent.leadingAnchor, constant: 16),
                 pill.trailingAnchor.constraint(equalTo: parent.trailingAnchor, constant: -16),
                 pill.heightAnchor.constraint(equalToConstant: 48),
 
-                seg.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 12),
+                dragIcon.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 12),
+                dragIcon.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
+                dragIcon.widthAnchor.constraint(equalToConstant: 18),
+                dragIcon.heightAnchor.constraint(equalToConstant: 18),
+
+                seg.leadingAnchor.constraint(equalTo: dragIcon.trailingAnchor, constant: 10),
                 seg.centerYAnchor.constraint(equalTo: pill.centerYAnchor),
                 seg.trailingAnchor.constraint(equalTo: close.leadingAnchor, constant: -8),
                 seg.heightAnchor.constraint(equalToConstant: 32),
@@ -177,6 +202,18 @@ final class TTInspector {
         pill.alpha = 0
         UIView.animate(withDuration: 0.3) { pill.alpha = 1 }
         closeButton = close
+    }
+
+    @objc private func bannerPanned(_ gr: UIPanGestureRecognizer) {
+        guard let pill = gr.view, let parent = pill.superview,
+              let topC = bannerTopConstraint else { return }
+        let dy = gr.translation(in: parent).y
+        let newConstant = topC.constant + dy
+        // Clamp: stay within parent bounds (top safe area to near bottom)
+        let minY = -(parent.safeAreaInsets.top)
+        let maxY = parent.bounds.height - pill.bounds.height - 20
+        topC.constant = min(max(newConstant, minY), maxY)
+        gr.setTranslation(.zero, in: parent)
     }
 
     // MARK: - Navigate / Highlight / Select mode
@@ -226,6 +263,12 @@ final class TTInspector {
         // Insert below the banner (which is the last subview) so chips don't cover it
         rootView.insertSubview(container, at: 0)
         highlightContainer = container
+
+        // Single GR on the container — still fires when a chip is the hit view because
+        // the container is in the responder chain as the chip's superview. This avoids
+        // the 50ms timer removing per-chip GRs mid-tap.
+        let tap = UITapGestureRecognizer(target: self, action: #selector(highlightContainerTapped(_:)))
+        container.addGestureRecognizer(tap)
 
         refreshHighlightChips()
         highlightTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
@@ -277,9 +320,7 @@ final class TTInspector {
             chip.layer.borderColor = UIColor.systemBlue.withAlphaComponent(0.6).cgColor
             chip.layer.borderWidth = 2
             chip.layer.cornerRadius = 0
-            chip.isUserInteractionEnabled = true
-            let chipTap = UITapGestureRecognizer(target: self, action: #selector(chipTapped(_:)))
-            chip.addGestureRecognizer(chipTap)
+            chip.isUserInteractionEnabled = true   // needed so TTHighlightContainer.hitTest finds it
             container.addSubview(chip)
 
             // Identifier label badge
@@ -316,9 +357,8 @@ final class TTInspector {
         hostingController?.view.isUserInteractionEnabled = true
     }
 
-    @objc private func chipTapped(_ gr: UITapGestureRecognizer) {
+    @objc private func highlightContainerTapped(_ gr: UITapGestureRecognizer) {
         guard let window = overlayWindow else { return }
-        // Use the chip's centre in window coords so identifyView finds the right element.
         handleTap(at: gr.location(in: window), in: window)
     }
 
@@ -606,55 +646,21 @@ struct TTInspectorOverlayView: View {
     let onRetry: () -> Void
     let onAccept: (String) -> Void   // passes the final (possibly edited) identifier
 
-    @State private var cardOffsetY: CGFloat = 0
-    @State private var dragOffsetY: CGFloat = 0
-
-    private let brandBlue = Color(red: 0.098, green: 0.145, blue: 0.667)
-
     var body: some View {
         ZStack(alignment: .bottom) {
             Color.clear
             if (state.phase == .confirming || state.phase == .done), let cap = state.captured {
-                HStack(alignment: .top, spacing: 0) {
-                    // ── Drag handle ───────────────────────────────────────────
-                    brandBlue
-                        .frame(width: 36)
-                        .overlay(
-                            Image(systemName: "arrow.up.and.down")
-                                .foregroundColor(.white.opacity(0.8))
-                                .font(.system(size: 13, weight: .semibold))
-                        )
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    dragOffsetY = value.translation.height
-                                }
-                                .onEnded { value in
-                                    let newOffset = cardOffsetY + value.translation.height
-                                    // Clamp: don't drag above top of screen or below start
-                                    cardOffsetY = min(max(newOffset, -500), 100)
-                                    dragOffsetY = 0
-                                }
-                        )
-
-                    // ── Confirm card ──────────────────────────────────────────
-                    TTConfirmCard(
-                        suggestedIdentifier: cap.identifier == "unknown" ? "" : cap.identifier,
-                        isDone: state.phase == .done,
-                        subtitle: mode == .page ? "Page identified as" : "Name this element",
-                        onRetry: onRetry,
-                        onAccept: onAccept
-                    )
-                }
+                TTConfirmCard(
+                    suggestedIdentifier: cap.identifier == "unknown" ? "" : cap.identifier,
+                    isDone: state.phase == .done,
+                    subtitle: mode == .page ? "Page identified as" : "Name this element",
+                    onRetry: onRetry,
+                    onAccept: onAccept
+                )
                 .padding(.horizontal, 16)
                 .padding(.bottom, 48)
-                .offset(y: cardOffsetY + dragOffsetY)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .animation(.spring(duration: 0.35), value: state.phase)
-                .onChange(of: state.phase) { _ in
-                    // Reset position when a new capture starts
-                    if state.phase == .tapping { cardOffsetY = 0; dragOffsetY = 0 }
-                }
             }
         }
     }
