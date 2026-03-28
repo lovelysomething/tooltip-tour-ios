@@ -49,13 +49,19 @@ struct TTStepCardView: View {
                 // ── Progress dots ─────────────────────────────────────────────
                 HStack(spacing: 6) {
                     ForEach(0..<totalSteps, id: \.self) { i in
-                        Circle()
-                            .fill(i == stepIndex ? btnBg : Color(UIColor.systemGray4))
-                            .frame(width: 6, height: 6)
+                        if i == stepIndex {
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(btnBg)
+                                .frame(width: 14, height: 6)
+                        } else {
+                            Circle()
+                                .fill(Color(UIColor.systemGray4))
+                                .frame(width: 6, height: 6)
+                        }
                     }
                     Spacer()
                 }
-                .padding(.bottom, 16)
+                .padding(.bottom, 12)
 
                 // ── Navigation ────────────────────────────────────────────────
                 HStack(spacing: 10) {
