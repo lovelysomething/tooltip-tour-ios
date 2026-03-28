@@ -43,12 +43,15 @@ public struct TTFabStyle: Codable {
     public let position: String?
     /// Distance in points above the safe-area bottom edge for the minimised circle. Default 40.
     public let bottomOffset: Double?
+    /// Width/height of the minimised launcher button in points. Default 44.
+    public let size: Double?
     enum CodingKeys: String, CodingKey {
         case bgColor = "bg_color"
         case borderRadius = "border_radius"
         case icon
         case position
         case bottomOffset = "bottom_offset"
+        case size
     }
 }
 

@@ -75,10 +75,10 @@ struct TTWelcomeCardView: View {
                     Circle()
                         .fill(Color.black.opacity(0.35))
                     Image(systemName: "xmark")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.system(size: 12, weight: .bold))
                         .foregroundColor(.white)
                 }
-                .frame(width: 22, height: 22)
+                .frame(width: 32, height: 32)
             }
 
             Spacer().frame(height: 20)

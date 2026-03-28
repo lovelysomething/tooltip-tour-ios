@@ -59,8 +59,11 @@ public struct TTLauncherView: View {
         let fabBg        = Color(config.styles?.resolvedFabBgColor ?? .systemIndigo)
         let icon         = TTIcon.from(config.styles?.fab?.icon)
         let bottomOffset = CGFloat(config.styles?.fab?.bottomOffset ?? 40) + bottomSafeArea
-        // Cap at 22 (half of the 44pt frame) so the max value = perfect circle
-        let fabRadius    = min(CGFloat(config.styles?.fab?.borderRadius ?? 22), 22)
+        let fabSize      = CGFloat(config.styles?.fab?.size ?? 44)
+        // Cap corner radius at half the frame so max value = perfect circle
+        let fabRadius    = min(CGFloat(config.styles?.fab?.borderRadius ?? fabSize / 2), fabSize / 2)
+        // Icon scales proportionally with the button (baseline: 18pt icon in 44pt frame)
+        let iconSize     = round(fabSize * (18 / 44))
 
         HStack {
             if alignRight { Spacer() }
@@ -68,9 +71,9 @@ public struct TTLauncherView: View {
             Button(action: { state.expandFab() }) {
                 ZStack {
                     RoundedRectangle(cornerRadius: fabRadius).fill(fabBg)
-                    TTIconView(icon: icon, color: .white, size: 18)
+                    TTIconView(icon: icon, color: .white, size: iconSize)
                 }
-                .frame(width: 44, height: 44)
+                .frame(width: fabSize, height: fabSize)
             }
             .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 0)
 
