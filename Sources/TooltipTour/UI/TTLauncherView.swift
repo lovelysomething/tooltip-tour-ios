@@ -59,13 +59,15 @@ public struct TTLauncherView: View {
         let fabBg        = Color(config.styles?.resolvedFabBgColor ?? .systemIndigo)
         let icon         = TTIcon.from(config.styles?.fab?.icon)
         let bottomOffset = CGFloat(config.styles?.fab?.bottomOffset ?? 40) + bottomSafeArea
+        // Cap at 22 (half of the 44pt frame) so the max value = perfect circle
+        let fabRadius    = min(CGFloat(config.styles?.fab?.borderRadius ?? 22), 22)
 
         HStack {
             if alignRight { Spacer() }
 
             Button(action: { state.expandFab() }) {
                 ZStack {
-                    Circle().fill(fabBg)
+                    RoundedRectangle(cornerRadius: fabRadius).fill(fabBg)
                     TTIconView(icon: icon, color: .white, size: 18)
                 }
                 .frame(width: 44, height: 44)
