@@ -120,13 +120,33 @@ extension TTStyles {
     var resolvedBeaconTextColor: UIColor { UIColor(hex: beacon?.textColor ?? "")  ?? .white }
 }
 
-// MARK: - UIColor hex helper
+// MARK: - UIColor hex / rgba helper
 
 extension UIColor {
     convenience init?(hex: String) {
-        var str = hex.trimmingCharacters(in: .whitespacesAndNewlines)
-        if str.hasPrefix("#") { str.removeFirst() }
-        guard str.count == 6, let rgb = UInt64(str, radix: 16) else { return nil }
+        let str = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // rgba(r,g,b,a) or rgb(r,g,b)
+        if str.lowercased().hasPrefix("rgb") {
+            let nums = str
+                .drop(while: { $0 != "(" }).dropFirst()
+                .prefix(while: { $0 != ")" })
+                .split(separator: ",")
+                .compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+            guard nums.count >= 3 else { return nil }
+            self.init(
+                red:   CGFloat(nums[0]) / 255,
+                green: CGFloat(nums[1]) / 255,
+                blue:  CGFloat(nums[2]) / 255,
+                alpha: nums.count >= 4 ? CGFloat(nums[3]) : 1
+            )
+            return
+        }
+
+        // #RRGGBB hex
+        var h = str
+        if h.hasPrefix("#") { h.removeFirst() }
+        guard h.count == 6, let rgb = UInt64(h, radix: 16) else { return nil }
         self.init(
             red:   CGFloat((rgb >> 16) & 0xFF) / 255,
             green: CGFloat((rgb >> 8)  & 0xFF) / 255,
