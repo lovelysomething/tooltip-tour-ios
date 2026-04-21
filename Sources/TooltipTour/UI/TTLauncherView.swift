@@ -264,6 +264,9 @@ final class TTLauncherState: ObservableObject {
             self.config  = config
             isReady    = true
             isOnScreen = true   // make visible once we know a tour exists
+            print("🎠 splashCarousel:", config.splashCarousel as Any)
+            print("🎠 carouselShownThisSession:", carouselShownThisSession)
+            print("🎠 hasReachedCarouselMaxShows:", hasReachedCarouselMaxShows(config))
 
             // ── Carousel check (fires before welcome card) ────────────────
             if let carousel = config.splashCarousel,
