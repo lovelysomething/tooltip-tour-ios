@@ -16,6 +16,31 @@ public struct TTConfig: Codable {
     public let maxShows: Int?
     public let steps: [TTStep]
     public let styles: TTStyles?
+    /// Optional full-screen carousel shown before the welcome card.
+    public let splashCarousel: TTSplashCarousel?
+}
+
+public struct TTSplashCarousel: Codable {
+    public let slides: [TTCarouselSlide]
+    /// "horizontal" or "vertical". Defaults to "horizontal".
+    public let direction: String
+    public let bgColor: String?
+    public let textColor: String?
+    /// Independent show-count limit for the carousel. nil = infinite.
+    public let maxShows: Int?
+
+    public init(slides: [TTCarouselSlide], direction: String = "horizontal",
+                bgColor: String? = nil, textColor: String? = nil, maxShows: Int? = nil) {
+        self.slides = slides; self.direction = direction
+        self.bgColor = bgColor; self.textColor = textColor; self.maxShows = maxShows
+    }
+}
+
+public struct TTCarouselSlide: Codable {
+    public let logoUrl: String?
+    public let imageUrl: String?
+    public let title: String?
+    public let description: String?
 }
 
 public struct TTStep: Codable {
