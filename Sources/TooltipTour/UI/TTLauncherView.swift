@@ -238,11 +238,11 @@ final class TTLauncherState: ObservableObject {
         let page = homePage   // capture before entering Task
 
         // ── Eager loading FAB ─────────────────────────────────────────────
-        // If this page previously had a tour (persisted in tt-known-pages) and
-        // hasn't been permanently dismissed, show the FAB with a spinner immediately
-        // so the user sees something before the network fetch completes.
+        print("⏳ fetchAndShow page:", page as Any)
+        print("⏳ knownPage:", page.flatMap { TooltipTour.shared.knownPage(for: $0) } as Any)
         if let page, let known = TooltipTour.shared.knownPage(for: page) {
             let dismissed = UserDefaults.standard.bool(forKey: "tt-dismissed-\(known.id)")
+            print("⏳ known found — dismissed:", dismissed)
             if !dismissed {
                 loadingFabPosition = known.position
                 loadingFabBgColor  = known.bgColor
