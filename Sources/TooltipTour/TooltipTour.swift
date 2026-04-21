@@ -50,15 +50,72 @@ public final class TooltipTour {
     public func prefetchAll() async {
         guard let fetched = try? await networkClient?.fetchAllConfigs(siteKey: siteKey) else { return }
         configCache.merge(fetched) { _, new in new }
+        // Persist page→tour map so the launcher can show a loading FAB immediately next launch.
+        for (page, config) in fetched { saveKnownPage(page, config: config) }
     }
 
     /// Fetch the walkthrough config for the given page identifier. Used by TTLauncherView.
     /// Checks the shared cache first so prefetchAll() results are used instantly.
     public func loadConfig(page: String? = nil) async -> TTConfig? {
         if let page, let cached = configCache[page] { return cached }
-        guard let config = try? await networkClient?.fetchConfig(siteKey: siteKey, page: page) else { return nil }
-        if let page { configCache[page] = config }
+        guard let config = try? await networkClient?.fetchConfig(siteKey: siteKey, page: page) else {
+            // Tour no longer exists — remove stale entry so loading FAB stops showing.
+            if let page { removeKnownPage(page) }
+            return nil
+        }
+        if let page {
+            configCache[page] = config
+            saveKnownPage(page, config: config)
+        }
         return config
+    }
+
+    // MARK: - Known-pages persistence (used by loading FAB)
+
+    /// Minimal data stored per page so the launcher can show a styled loading FAB immediately.
+    struct TTKnownPage: Codable {
+        let id: String
+        let position: String  // "left" or "right"
+        let bgColor: String   // CSS hex, e.g. "#3730A3"
+    }
+
+    private static let knownPagesKey = "tt-known-pages"
+
+    func knownPage(for page: String) -> TTKnownPage? {
+        guard let json = UserDefaults.standard.string(forKey: Self.knownPagesKey),
+              let data = json.data(using: .utf8),
+              let map  = try? JSONDecoder().decode([String: TTKnownPage].self, from: data)
+        else { return nil }
+        return map[page]
+    }
+
+    private func saveKnownPage(_ page: String, config: TTConfig) {
+        var map = allKnownPages()
+        let position = config.styles?.fab?.position ?? "right"
+        let bgColor  = config.styles?.fab?.bgColor ?? "#3730A3"
+        map[page] = TTKnownPage(id: config.id, position: position, bgColor: bgColor)
+        if let data = try? JSONEncoder().encode(map),
+           let json = String(data: data, encoding: .utf8) {
+            UserDefaults.standard.set(json, forKey: Self.knownPagesKey)
+        }
+    }
+
+    func removeKnownPage(_ page: String) {
+        var map = allKnownPages()
+        guard map[page] != nil else { return }
+        map.removeValue(forKey: page)
+        if let data = try? JSONEncoder().encode(map),
+           let json = String(data: data, encoding: .utf8) {
+            UserDefaults.standard.set(json, forKey: Self.knownPagesKey)
+        }
+    }
+
+    private func allKnownPages() -> [String: TTKnownPage] {
+        guard let json = UserDefaults.standard.string(forKey: Self.knownPagesKey),
+              let data = json.data(using: .utf8),
+              let map  = try? JSONDecoder().decode([String: TTKnownPage].self, from: data)
+        else { return [:] }
+        return map
     }
 
     /// Called by TTLauncherState after the session ends so the launcher can show the minimised circle.

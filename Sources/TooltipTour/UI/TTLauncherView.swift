@@ -14,12 +14,33 @@ public struct TTLauncherView: View {
         ZStack(alignment: .bottom) {
             Color.clear
 
+            // ── Full-screen carousel (shown before welcome card) ──────────────
+            if state.isReady, let config = state.config, state.showCarousel {
+                TTSplashCarouselView(
+                    carousel:  config.splashCarousel!,
+                    onDone:    { state.carouselDone() },
+                    onDismiss: { state.carouselDismissed() }
+                )
+                .ignoresSafeArea()
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(10)
+            }
+
             // Dim overlay — shown behind the welcome card so the user must interact with it
             if state.showWelcome {
                 Color.black.opacity(0.45)
                     .ignoresSafeArea()
                     .transition(.opacity)
                     .onTapGesture { state.minimise() }
+            }
+
+            // ── Eager loading FAB (shown while config is still fetching) ─────────
+            if state.isLoading {
+                loadingCircle(
+                    alignRight:  state.loadingFabPosition != "left",
+                    bgColorHex:  state.loadingFabBgColor
+                )
+                .transition(.opacity)
             }
 
             if state.isReady, let config = state.config {
@@ -44,6 +65,8 @@ public struct TTLauncherView: View {
         .ignoresSafeArea()
         .animation(.easeOut(duration: 0.25), value: state.showWelcome)
         .animation(.easeInOut(duration: 0.35), value: state.isOnScreen)
+        .animation(.easeOut(duration: 0.35),  value: state.showCarousel)
+        .animation(.easeOut(duration: 0.25),  value: state.isLoading)
         .onAppear { state.load(page: ttPageIdentifier) }
         // React to page changes while this view is still visible —
         // fires BEFORE the tab transition, unlike onDisappear.
@@ -83,6 +106,31 @@ public struct TTLauncherView: View {
         .padding(.bottom, bottomOffset)
     }
 
+    // MARK: - Loading circle
+
+    @ViewBuilder
+    private func loadingCircle(alignRight: Bool, bgColorHex: String) -> some View {
+        let fabBg        = UIColor(hex: bgColorHex).map { Color($0) } ?? Color(.systemIndigo)
+        let fabSize: CGFloat = 44
+        let fabRadius: CGFloat = 22
+
+        HStack {
+            if alignRight { Spacer() }
+            ZStack {
+                RoundedRectangle(cornerRadius: fabRadius).fill(fabBg)
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .tint(.white)
+                    .scaleEffect(0.8)
+            }
+            .frame(width: fabSize, height: fabSize)
+            .shadow(color: .black.opacity(0.25), radius: 12, x: 0, y: 0)
+            if !alignRight { Spacer() }
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 40 + bottomSafeArea)
+    }
+
     // MARK: - Safe area
 
     private var bottomSafeArea: CGFloat {
@@ -102,6 +150,12 @@ final class TTLauncherState: ObservableObject {
     @Published var isMinimised  = false
     @Published var showWelcome  = false
     @Published var isOnScreen   = true
+    @Published var showCarousel = false
+    /// True while loadConfig() is in-flight AND this page was previously known to have a tour.
+    @Published var isLoading    = false
+    /// Cached FAB style for the loading spinner — populated from tt-known-pages before config arrives.
+    @Published var loadingFabPosition = "right"
+    @Published var loadingFabBgColor  = "#3730A3"
 
     private var pendingAutoOpen = false
     private var hasLoaded       = false
@@ -111,6 +165,8 @@ final class TTLauncherState: ObservableObject {
     private var isGlobal        = false
     /// Tour IDs the user has manually minimised this session — won't auto-open until they tap the circle.
     private var sessionMinimised: Set<String> = []
+    /// Prevents the carousel re-firing during the same app session (e.g. navigate away and back).
+    private var carouselShownThisSession = false
     private var inspectorObserver: Any?
 
     init() {
@@ -180,13 +236,46 @@ final class TTLauncherState: ObservableObject {
 
     private func fetchAndShow() {
         let page = homePage   // capture before entering Task
+
+        // ── Eager loading FAB ─────────────────────────────────────────────
+        // If this page previously had a tour (persisted in tt-known-pages) and
+        // hasn't been permanently dismissed, show the FAB with a spinner immediately
+        // so the user sees something before the network fetch completes.
+        if let page, let known = TooltipTour.shared.knownPage(for: page) {
+            let dismissed = UserDefaults.standard.bool(forKey: "tt-dismissed-\(known.id)")
+            if !dismissed {
+                loadingFabPosition = known.position
+                loadingFabBgColor  = known.bgColor
+                withAnimation(.easeOut(duration: 0.25)) { isLoading = true }
+            }
+        }
+
         Task {
             // Don't launch tours while the Visual Inspector is open.
-            guard !TooltipTour.shared.isInspectorActive else { return }
-            guard let config = await TooltipTour.shared.loadConfig(page: page) else { return }
+            guard !TooltipTour.shared.isInspectorActive else {
+                withAnimation { isLoading = false }
+                return
+            }
+            guard let config = await TooltipTour.shared.loadConfig(page: page) else {
+                withAnimation { isLoading = false }
+                return
+            }
+            withAnimation { isLoading = false }
             self.config  = config
             isReady    = true
             isOnScreen = true   // make visible once we know a tour exists
+
+            // ── Carousel check (fires before welcome card) ────────────────
+            if let carousel = config.splashCarousel,
+               !carousel.slides.isEmpty,
+               !carouselShownThisSession,
+               !hasReachedCarouselMaxShows(config) {
+                incrementCarouselShowCount(config.id)
+                carouselShownThisSession = true
+                try? await Task.sleep(nanoseconds: 300_000_000)  // 0.3s settle
+                withAnimation(.easeOut(duration: 0.35)) { showCarousel = true }
+                return
+            }
 
             if !isDismissed(config.id) {
                 if sessionMinimised.contains(config.id) {
@@ -251,6 +340,41 @@ final class TTLauncherState: ObservableObject {
         guard let config else { return }
         setDismissed(config.id)
         withAnimation(.easeOut(duration: 0.22)) { showWelcome = false }
+    }
+
+    // MARK: - Carousel
+
+    func carouselDone()      { withAnimation(.easeOut(duration: 0.3)) { showCarousel = false }; continueAfterCarousel() }
+    func carouselDismissed() { withAnimation(.easeOut(duration: 0.3)) { showCarousel = false }; continueAfterCarousel() }
+
+    private func continueAfterCarousel() {
+        guard let config else { return }
+        guard !config.steps.isEmpty else {
+            // Carousel-only walkthrough — show FAB so user can replay
+            withAnimation(.easeInOut(duration: 0.5)) { isMinimised = true }
+            return
+        }
+        if !isDismissed(config.id) && !hasReachedMaxShows(config) {
+            incrementShowCount(config.id)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.openWelcome() }
+        } else {
+            withAnimation(.easeInOut(duration: 0.5)) { isMinimised = true }
+        }
+    }
+
+    // MARK: - Carousel show count
+
+    private func getCarouselShowCount(_ id: String) -> Int {
+        UserDefaults.standard.integer(forKey: "tt-carousel-shows-\(id)")
+    }
+
+    private func incrementCarouselShowCount(_ id: String) {
+        UserDefaults.standard.set(getCarouselShowCount(id) + 1, forKey: "tt-carousel-shows-\(id)")
+    }
+
+    private func hasReachedCarouselMaxShows(_ config: TTConfig) -> Bool {
+        guard let max = config.splashCarousel?.maxShows else { return false }
+        return getCarouselShowCount(config.id) >= max
     }
 
     // MARK: - Dismiss persistence
