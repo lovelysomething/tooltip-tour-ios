@@ -238,16 +238,10 @@ final class TTLauncherState: ObservableObject {
         let page = homePage   // capture before entering Task
 
         // ── Eager loading FAB ─────────────────────────────────────────────
-        print("⏳ fetchAndShow page:", page as Any)
-        print("⏳ knownPage:", page.flatMap { TooltipTour.shared.knownPage(for: $0) } as Any)
         if let page, let known = TooltipTour.shared.knownPage(for: page) {
-            let dismissed = UserDefaults.standard.bool(forKey: "tt-dismissed-\(known.id)")
-            print("⏳ known found — dismissed:", dismissed)
-            if !dismissed {
-                loadingFabPosition = known.position
-                loadingFabBgColor  = known.bgColor
-                withAnimation(.easeOut(duration: 0.25)) { isLoading = true }
-            }
+            loadingFabPosition = known.position
+            loadingFabBgColor  = known.bgColor
+            withAnimation(.easeOut(duration: 0.25)) { isLoading = true }
         }
 
         Task {
@@ -264,9 +258,6 @@ final class TTLauncherState: ObservableObject {
             self.config  = config
             isReady    = true
             isOnScreen = true   // make visible once we know a tour exists
-            print("🎠 splashCarousel:", config.splashCarousel as Any)
-            print("🎠 carouselShownThisSession:", carouselShownThisSession)
-            print("🎠 hasReachedCarouselMaxShows:", hasReachedCarouselMaxShows(config))
 
             // ── Carousel check (fires before welcome card) ────────────────
             if let carousel = config.splashCarousel,
