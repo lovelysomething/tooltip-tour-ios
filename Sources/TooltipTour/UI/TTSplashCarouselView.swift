@@ -47,14 +47,14 @@ public struct TTSplashCarouselView: View {
                         pageCount: slides.count,
                         currentPage: $currentIndex
                     ) { i in
-                        SlideContentView(slide: slides[i], textColor: textColor)
+                        SlideContentView(slide: slides[i], textColor: textColor, containerWidth: geo.size.width)
                             .frame(width: geo.size.width, height: geo.size.height)
                     }
                     .ignoresSafeArea()
                 } else {
                     TabView(selection: $currentIndex) {
                         ForEach(0 ..< slides.count, id: \.self) { i in
-                            SlideContentView(slide: slides[i], textColor: textColor)
+                            SlideContentView(slide: slides[i], textColor: textColor, containerWidth: geo.size.width)
                                 .tag(i)
                         }
                     }
@@ -181,6 +181,11 @@ private struct TTVerticalPager<Content: View>: View {
 private struct SlideContentView: View {
     let slide: TTCarouselSlide
     let textColor: Color
+    let containerWidth: CGFloat
+
+    /// Logo width = min(50% of container, 400pt); height = width / 2 (2:1 ratio)
+    private var logoWidth: CGFloat { min(containerWidth * 0.5, 400) }
+    private var logoHeight: CGFloat { logoWidth / 2 }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -192,10 +197,10 @@ private struct SlideContentView: View {
                     AsyncImage(url: URL(string: logoUrl)) { phase in
                         switch phase {
                         case .success(let img): img.resizable().scaledToFit()
-                        default: Color.white.opacity(0.08).frame(width: 160, height: 80)
+                        default: Color.white.opacity(0.08).frame(width: logoWidth, height: logoHeight)
                         }
                     }
-                    .frame(width: 160, height: 80)
+                    .frame(width: logoWidth, height: logoHeight)
                     .padding(.bottom, 20)
                 }
 
