@@ -18,8 +18,6 @@ public struct TTSplashCarouselView: View {
     @State private var currentIndex: Int = 0
 
     private var slides: [TTCarouselSlide] { carousel.slides }
-    private var isVertical: Bool { carousel.direction == "vertical" }
-
     private var bgColor: Color {
         UIColor(hex: carousel.bgColor ?? "")
             .map { Color($0) } ?? Color(red: 0.102, green: 0.102, blue: 0.173)
@@ -42,25 +40,14 @@ public struct TTSplashCarouselView: View {
                 bgColor.ignoresSafeArea()
 
                 // ── Slide pager ───────────────────────────────────────────────
-                if isVertical {
-                    TTVerticalPager(
-                        pageCount: slides.count,
-                        currentPage: $currentIndex
-                    ) { i in
+                TabView(selection: $currentIndex) {
+                    ForEach(0 ..< slides.count, id: \.self) { i in
                         SlideContentView(slide: slides[i], textColor: textColor, containerWidth: geo.size.width)
-                            .frame(width: geo.size.width, height: geo.size.height)
+                            .tag(i)
                     }
-                    .ignoresSafeArea()
-                } else {
-                    TabView(selection: $currentIndex) {
-                        ForEach(0 ..< slides.count, id: \.self) { i in
-                            SlideContentView(slide: slides[i], textColor: textColor, containerWidth: geo.size.width)
-                                .tag(i)
-                        }
-                    }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
-                    .ignoresSafeArea()
                 }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .ignoresSafeArea()
 
                 // ── Dismiss button ────────────────────────────────────────────
                 VStack {
@@ -134,45 +121,6 @@ public struct TTSplashCarouselView: View {
             }
         }
         .ignoresSafeArea()
-    }
-}
-
-// MARK: - Vertical pager (custom DragGesture-based)
-
-private struct TTVerticalPager<Content: View>: View {
-    let pageCount: Int
-    @Binding var currentPage: Int
-    @ViewBuilder let content: (Int) -> Content
-
-    @State private var dragOffset: CGFloat = 0
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                ForEach(0 ..< pageCount, id: \.self) { i in
-                    content(i)
-                        .offset(y: CGFloat(i - currentPage) * geo.size.height + dragOffset)
-                }
-            }
-            .clipped()
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        dragOffset = value.translation.height
-                    }
-                    .onEnded { value in
-                        let threshold = geo.size.height * 0.25
-                        withAnimation(.easeInOut(duration: 0.35)) {
-                            dragOffset = 0
-                            if value.translation.height < -threshold, currentPage < pageCount - 1 {
-                                currentPage += 1
-                            } else if value.translation.height > threshold, currentPage > 0 {
-                                currentPage -= 1
-                            }
-                        }
-                    }
-            )
-        }
     }
 }
 
