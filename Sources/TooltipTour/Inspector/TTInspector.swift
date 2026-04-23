@@ -12,10 +12,9 @@ final class TTInspector {
     var onEnd: (() -> Void)?
 
     private var overlayWindow: TTInspectorWindow?
-    private var tapView: TTTapInterceptorView?
     private var hostingController: UIHostingController<AnyView>?
     private var closeButton: UIButton?           // UIKit button for banner ✕
-    private var modeSegment: UISegmentedControl? // Navigate / Highlight / Select toggle
+    private var modeSegment: UISegmentedControl? // Navigate / Highlight toggle
     private var highlightContainer: UIView?      // holds per-element highlight chips
     private var highlightTimer: Timer?           // refreshes chip positions while scrolling
     private var bannerTopConstraint: NSLayoutConstraint? // updated when user drags banner
@@ -46,17 +45,7 @@ final class TTInspector {
         window.makeKeyAndVisible()
         overlayWindow = window
 
-        // 1 ── Full-screen tap interceptor (bottom layer, handles element capture)
-        //      Starts DISABLED — user begins in Navigate mode to scroll first.
-        let tapper = TTTapInterceptorView(frame: window.bounds)
-        tapper.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        tapper.backgroundColor = .clear
-        tapper.isUserInteractionEnabled = false
-        tapper.onTap = { [weak self] point in self?.handleTap(at: point, in: window) }
-        root.view.addSubview(tapper)
-        tapView = tapper
-
-        // 2 ── SwiftUI layer (confirm card only — user interaction DISABLED during tapping)
+        // 1 ── SwiftUI layer (confirm card only — user interaction DISABLED during tapping)
         let overlay = TTInspectorOverlayView(
             state: state,
             mode: mode,
@@ -75,7 +64,7 @@ final class TTInspector {
         hc.didMove(toParent: root)
         hostingController = hc
 
-        // 3 ── UIKit banner (always on top, owns the ✕ button)
+        // 2 ── UIKit banner (always on top, owns the ✕ button)
         addBanner(to: root.view)
     }
 
@@ -159,8 +148,8 @@ final class TTInspector {
                 close.widthAnchor.constraint(equalToConstant: 36),
             ])
         } else {
-            // Element mode: Navigate | Highlight | Select segmented control
-            let seg = UISegmentedControl(items: ["Navigate", "Highlight", "Select"])
+            // Element mode: Navigate | Highlight segmented control
+            let seg = UISegmentedControl(items: ["Navigate", "Highlight"])
             seg.selectedSegmentIndex = 0
             seg.translatesAutoresizingMaskIntoConstraints = false
             seg.layer.cornerRadius = 0
@@ -241,36 +230,25 @@ final class TTInspector {
         gr.setTranslation(.zero, in: parent)
     }
 
-    // MARK: - Navigate / Highlight / Select mode
+    // MARK: - Navigate / Highlight mode
 
     @objc private func modeChanged(_ seg: UISegmentedControl) {
         setMode(seg.selectedSegmentIndex)
     }
 
-    /// 0 = Navigate, 1 = Highlight, 2 = Select
+    /// 0 = Navigate, 1 = Highlight
     private func setMode(_ index: Int) {
         modeSegment?.selectedSegmentIndex = index
 
         switch index {
         case 1: // Highlight — show target chips; taps handled by highlightContainer
             overlayWindow?.isNavigating = false
-            tapView?.isUserInteractionEnabled = false
-            tapView?.backgroundColor = .clear
             guard state.phase == .tapping else { return }
             startHighlighting()
-
-        case 2: // Select — intercept next tap
-            overlayWindow?.isNavigating = false
-            stopHighlighting()
-            guard state.phase == .tapping else { return }
-            tapView?.isUserInteractionEnabled = true
-            tapView?.backgroundColor = UIColor(red: 0, green: 0, blue: 1, alpha: 0.04)
 
         default: // 0 = Navigate
             overlayWindow?.isNavigating = true
             stopHighlighting()
-            tapView?.isUserInteractionEnabled = false
-            tapView?.backgroundColor = .clear
         }
     }
 
@@ -366,7 +344,7 @@ final class TTInspector {
         }
     }
 
-    // MARK: - Tap handling
+    // MARK: - Tap handling (Highlight mode — chip tapped)
 
     private func handleTap(at point: CGPoint, in window: UIWindow) {
         guard state.phase == .tapping else { return }
@@ -377,8 +355,6 @@ final class TTInspector {
         // Show confirm card — enable SwiftUI layer for button interaction
         state.captured = TTCapturedElement(identifier: identifier, displayName: displayName, isConfirmed: false)
         state.phase = .confirming
-        tapView?.isUserInteractionEnabled = false
-        tapView?.backgroundColor = .clear
         hostingController?.view.isUserInteractionEnabled = true
     }
 
@@ -600,7 +576,7 @@ final class TTInspector {
 // MARK: - Inspector mode
 
 public enum TTInspectorMode {
-    case element  // Navigate / Highlight / Select — tap to capture a UI element
+    case element  // Navigate / Highlight — tap chip to capture a UI element
     case page     // Navigate freely — tap "Capture this screen" to capture the current VC
 }
 
@@ -616,7 +592,7 @@ final class TTInspectorState: ObservableObject {
     @Published var captured: TTCapturedElement? = nil
 }
 
-// MARK: - TTInspectorWindow / TTTapInterceptorView
+// MARK: - TTInspectorWindow
 
 // MARK: - Highlight container (pass-through hit testing)
 
@@ -642,24 +618,6 @@ final class TTInspectorWindow: UIWindow {
         // handle their own interactivity — real controls are always returned.
         if hit == nil || hit == rootViewController?.view { return nil }
         return hit
-    }
-}
-
-final class TTTapInterceptorView: UIView {
-    var onTap: ((CGPoint) -> Void)?
-
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        let gr = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
-        gr.cancelsTouchesInView = true
-        gr.delaysTouchesBegan  = true
-        addGestureRecognizer(gr)
-    }
-
-    required init?(coder: NSCoder) { super.init(coder: coder) }
-
-    @objc private func tapped(_ gr: UITapGestureRecognizer) {
-        onTap?(gr.location(in: self))
     }
 }
 
