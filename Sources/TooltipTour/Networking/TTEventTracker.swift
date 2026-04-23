@@ -1,11 +1,15 @@
 import Foundation
 
 enum TTEventType: String {
-    case guideShown       = "guide_shown"
-    case guideStarted     = "guide_started"
-    case stepViewed       = "step_viewed"
-    case guideCompleted   = "guide_completed"
-    case guideDismissed   = "guide_dismissed"
+    case guideShown            = "guide_shown"
+    case guideStarted          = "guide_started"
+    case stepViewed            = "step_viewed"
+    case guideCompleted        = "guide_completed"
+    case guideDismissed        = "guide_dismissed"
+    case carouselShown         = "carousel_shown"
+    case carouselSlideViewed   = "carousel_slide_viewed"
+    case carouselCompleted     = "carousel_completed"
+    case carouselDismissed     = "carousel_dismissed"
 }
 
 final class TTEventTracker {

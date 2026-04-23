@@ -121,6 +121,11 @@ public final class TooltipTour {
     /// Called by TTLauncherState after the session ends so the launcher can show the minimised circle.
     var onSessionEnd: (() -> Void)?
 
+    /// Fire a carousel analytics event. Used internally by TTLauncherView.
+    func trackCarousel(_ event: TTEventType, walkthroughId: String, slideIndex: Int? = nil) {
+        tracker?.track(event: event, walkthroughId: walkthroughId, siteKey: siteKey, stepIndex: slideIndex)
+    }
+
     /// Start the walkthrough with a pre-loaded config. Used internally by TTLauncherView.
     public func startSession(config: TTConfig) {
         guard activeSession == nil else { return }

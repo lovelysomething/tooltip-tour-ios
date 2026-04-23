@@ -13,6 +13,7 @@ import SwiftUI
 public struct TTSplashCarouselView: View {
     let carousel: TTSplashCarousel
     let btnBorderRadius: CGFloat
+    let onSlideViewed: (Int) -> Void
     let onDone: () -> Void
     let onDismiss: () -> Void
 
@@ -29,9 +30,10 @@ public struct TTSplashCarouselView: View {
             .map { Color($0) } ?? .white
     }
 
-    public init(carousel: TTSplashCarousel, btnBorderRadius: CGFloat = 8, onDone: @escaping () -> Void, onDismiss: @escaping () -> Void) {
+    public init(carousel: TTSplashCarousel, btnBorderRadius: CGFloat = 8, onSlideViewed: @escaping (Int) -> Void = { _ in }, onDone: @escaping () -> Void, onDismiss: @escaping () -> Void) {
         self.carousel = carousel
         self.btnBorderRadius = btnBorderRadius
+        self.onSlideViewed = onSlideViewed
         self.onDone = onDone
         self.onDismiss = onDismiss
     }
@@ -123,6 +125,8 @@ public struct TTSplashCarouselView: View {
             }
         }
         .ignoresSafeArea()
+        .onAppear { onSlideViewed(0) }
+        .onChange(of: currentIndex) { newIndex in onSlideViewed(newIndex) }
     }
 }
 

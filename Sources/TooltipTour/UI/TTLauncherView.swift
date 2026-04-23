@@ -19,8 +19,17 @@ public struct TTLauncherView: View {
                 TTSplashCarouselView(
                     carousel:        config.splashCarousel!,
                     btnBorderRadius: CGFloat(config.styles?.btn?.borderRadius ?? 8),
-                    onDone:          { state.carouselDone() },
-                    onDismiss:       { state.carouselDismissed() }
+                    onSlideViewed:   { index in
+                        TooltipTour.shared.trackCarousel(.carouselSlideViewed, walkthroughId: config.id, slideIndex: index)
+                    },
+                    onDone: {
+                        TooltipTour.shared.trackCarousel(.carouselCompleted, walkthroughId: config.id)
+                        state.carouselDone()
+                    },
+                    onDismiss: {
+                        TooltipTour.shared.trackCarousel(.carouselDismissed, walkthroughId: config.id)
+                        state.carouselDismissed()
+                    }
                 )
                 .ignoresSafeArea()
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -270,6 +279,7 @@ final class TTLauncherState: ObservableObject {
                 carouselShownThisSession = true
                 try? await Task.sleep(nanoseconds: 300_000_000)  // 0.3s settle
                 withAnimation(.easeOut(duration: 0.35)) { showCarousel = true }
+                TooltipTour.shared.trackCarousel(.carouselShown, walkthroughId: config.id)
                 return
             }
 
