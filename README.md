@@ -1,6 +1,6 @@
 # Tooltip Tour — iOS SDK
 
-Native Swift/SwiftUI SDK for [Tooltip Tour](https://app.lovelysomething.com) — the guided walkthrough tool for web, iOS, and Android.
+Native Swift/SwiftUI SDK for [Tooltip Tour](https://app.lovelysomething.com) — the guided walkthrough tool for web, iOS, Android, and React Native.
 
 ---
 
@@ -147,6 +147,11 @@ In `Info.plist`, add a URL type with the scheme `tooltiptour`. Or add to your `I
 
 The dashboard will generate a QR code you scan with your device to launch the inspector.
 
+The inspector has two modes:
+
+- **Navigate** — touches pass through to your app; scroll and explore freely
+- **Highlight** — blue chips appear over every registered `.ttTarget()` view; tap a chip to capture its identifier
+
 ---
 
 ## Requirements
@@ -171,10 +176,10 @@ For mixed UIKit/SwiftUI apps, `.ttPage()` and `.ttTarget()` work inside any Swif
 
 ---
 
-## Android SDK
+## Other SDKs
 
-The equivalent Android SDK (Kotlin/Jetpack Compose) lives at
-[tooltip-tour-android](https://github.com/lovelysomething/tooltip-tour-android).
+- [tooltip-tour-android](https://github.com/lovelysomething/tooltip-tour-android) — Kotlin/Jetpack Compose
+- [tooltip-tour-react-native](https://github.com/lovelysomething/tooltip-tour-react-native) — Pure JS, Expo-compatible
 
 ---
 
