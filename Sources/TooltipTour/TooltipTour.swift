@@ -131,6 +131,7 @@ public final class TooltipTour {
             self?.onSessionEnd?()
         }
         activeSession = session
+        tracker.track(event: .guideStarted, walkthroughId: config.id, siteKey: siteKey)
         session.start()
     }
 

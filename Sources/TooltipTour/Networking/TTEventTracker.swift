@@ -2,7 +2,8 @@ import Foundation
 
 enum TTEventType: String {
     case guideShown       = "guide_shown"
-    case stepCompleted    = "step_completed"
+    case guideStarted     = "guide_started"
+    case stepViewed       = "step_viewed"
     case guideCompleted   = "guide_completed"
     case guideDismissed   = "guide_dismissed"
 }

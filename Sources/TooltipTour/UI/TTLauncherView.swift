@@ -17,9 +17,10 @@ public struct TTLauncherView: View {
             // ── Full-screen carousel (shown before welcome card) ──────────────
             if state.isReady, let config = state.config, state.showCarousel {
                 TTSplashCarouselView(
-                    carousel:  config.splashCarousel!,
-                    onDone:    { state.carouselDone() },
-                    onDismiss: { state.carouselDismissed() }
+                    carousel:        config.splashCarousel!,
+                    btnBorderRadius: CGFloat(config.styles?.btn?.borderRadius ?? 8),
+                    onDone:          { state.carouselDone() },
+                    onDismiss:       { state.carouselDismissed() }
                 )
                 .ignoresSafeArea()
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -263,6 +264,7 @@ final class TTLauncherState: ObservableObject {
             if let carousel = config.splashCarousel,
                !carousel.slides.isEmpty,
                !carouselShownThisSession,
+               !isDismissed(config.id),
                !hasReachedCarouselMaxShows(config) {
                 incrementCarouselShowCount(config.id)
                 carouselShownThisSession = true

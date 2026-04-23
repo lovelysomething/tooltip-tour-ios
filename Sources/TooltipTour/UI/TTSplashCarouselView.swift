@@ -12,6 +12,7 @@ import SwiftUI
  */
 public struct TTSplashCarouselView: View {
     let carousel: TTSplashCarousel
+    let btnBorderRadius: CGFloat
     let onDone: () -> Void
     let onDismiss: () -> Void
 
@@ -28,8 +29,9 @@ public struct TTSplashCarouselView: View {
             .map { Color($0) } ?? .white
     }
 
-    public init(carousel: TTSplashCarousel, onDone: @escaping () -> Void, onDismiss: @escaping () -> Void) {
+    public init(carousel: TTSplashCarousel, btnBorderRadius: CGFloat = 8, onDone: @escaping () -> Void, onDismiss: @escaping () -> Void) {
         self.carousel = carousel
+        self.btnBorderRadius = btnBorderRadius
         self.onDone = onDone
         self.onDismiss = onDismiss
     }
@@ -90,7 +92,7 @@ public struct TTSplashCarouselView: View {
                         HStack {
                             if currentIndex > 0 {
                                 Button(action: { withAnimation(.easeInOut) { currentIndex -= 1 } }) {
-                                    Text("← Back")
+                                    Text("Back")
                                         .font(.system(size: 14, weight: .medium))
                                         .foregroundColor(textColor.opacity(0.65))
                                 }
@@ -104,13 +106,13 @@ public struct TTSplashCarouselView: View {
                                 if currentIndex == slides.count - 1 { onDone() }
                                 else { withAnimation(.easeInOut) { currentIndex += 1 } }
                             }) {
-                                Text(currentIndex == slides.count - 1 ? "Done" : "Next →")
+                                Text(currentIndex == slides.count - 1 ? "Done" : "Next")
                                     .font(.system(size: 14, weight: .bold))
                                     .foregroundColor(bgColor)
                                     .padding(.horizontal, 20)
                                     .padding(.vertical, 10)
                                     .background(textColor)
-                                    .cornerRadius(8)
+                                    .cornerRadius(btnBorderRadius)
                             }
                         }
                         .padding(.horizontal, 24)

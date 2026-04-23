@@ -90,7 +90,7 @@ final class TTWalkthroughSession {
         currentStep = index
         let step = config.steps[index]
 
-        tracker.track(event: .stepCompleted, walkthroughId: config.id, siteKey: siteKey, stepIndex: index)
+        tracker.track(event: .stepViewed, walkthroughId: config.id, siteKey: siteKey, stepIndex: index)
 
         // 1. Scroll target into view (SwiftUI bus), then
         // 2. Re-measure frame and place beacon + card at the correct position
