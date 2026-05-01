@@ -265,6 +265,15 @@ final class TTLauncherState: ObservableObject {
                 return
             }
             withAnimation { isLoading = false }
+
+            // ── Prior-tour display condition (element condition N/A on iOS) ─
+            if let dc = config.displayConditions?.priorTourCondition {
+                let seen = UserDefaults.standard.integer(forKey: "tt-shows-\(dc.tourId)") > 0
+                let done = UserDefaults.standard.bool(forKey: "tt-completed-\(dc.tourId)")
+                if dc.rule == "seen"      && !seen { return }
+                if dc.rule == "completed" && !done { return }
+            }
+
             self.config  = config
             isReady    = true
             isOnScreen = true   // make visible once we know a tour exists

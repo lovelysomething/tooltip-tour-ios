@@ -2,6 +2,25 @@ import UIKit
 
 // MARK: - API Response Models
 
+// MARK: - Display conditions
+
+public struct TTElementCondition: Codable {
+    public let selector: String
+    public let rule: String   // "exists" | "not_exists"
+}
+
+public struct TTTourCondition: Codable {
+    public let tourId: String
+    public let rule: String   // "seen" | "completed"
+}
+
+public struct TTDisplayConditions: Codable {
+    public let elementCondition:   TTElementCondition?
+    public let priorTourCondition: TTTourCondition?
+}
+
+// MARK: - Tour config
+
 public struct TTConfig: Codable {
     public let id: String
     /// Only present in prefetch responses — the page identifier this tour is bound to.
@@ -18,6 +37,8 @@ public struct TTConfig: Codable {
     public let styles: TTStyles?
     /// Optional full-screen carousel shown before the welcome card.
     public let splashCarousel: TTSplashCarousel?
+    /// Optional conditions controlling when this tour is displayed.
+    public let displayConditions: TTDisplayConditions?
 }
 
 public struct TTSplashCarousel: Codable {

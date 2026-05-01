@@ -218,6 +218,7 @@ final class TTWalkthroughSession {
 
     private func complete() {
         tracker.track(event: .guideCompleted, walkthroughId: config.id, siteKey: siteKey)
+        UserDefaults.standard.set(true, forKey: "tt-completed-\(config.id)")
         tearDown()
         onEnd?()
     }
