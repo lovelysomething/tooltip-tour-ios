@@ -328,6 +328,14 @@ final class TTLauncherState: ObservableObject {
     }
 
     func expandFab() {
+        // Button-only mode: skip welcome card and start tour immediately
+        if let config, config.welcomeMode == "button" {
+            if !isDismissed(config.id) && !hasReachedMaxShows(config) {
+                incrementShowCount(config.id)
+                startGuide()
+            }
+            return
+        }
         withAnimation(.easeInOut(duration: 0.45)) { isMinimised = false }
         if pendingAutoOpen, let config, !isDismissed(config.id) {
             pendingAutoOpen = false
