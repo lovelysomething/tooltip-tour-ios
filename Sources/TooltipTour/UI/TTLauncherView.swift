@@ -274,6 +274,23 @@ final class TTLauncherState: ObservableObject {
                 if dc.rule == "completed" && !done { return }
             }
 
+            // ── Date-range display condition ──────────────────────────────────
+            if let dr = config.displayConditions?.dateRange {
+                let fmt = DateFormatter()
+                fmt.dateFormat = "yyyy-MM-dd"
+                fmt.timeZone = .current
+                let now = Date()
+                if let fromStr = dr.from, let fromDate = fmt.date(from: fromStr) {
+                    if now < fromDate { return }
+                }
+                if let toStr = dr.to, let toDate = fmt.date(from: toStr) {
+                    let cal = Calendar.current
+                    if let endOfDay = cal.date(bySettingHour: 23, minute: 59, second: 59, of: toDate) {
+                        if now > endOfDay { return }
+                    }
+                }
+            }
+
             self.config  = config
             isReady    = true
             isOnScreen = true   // make visible once we know a tour exists

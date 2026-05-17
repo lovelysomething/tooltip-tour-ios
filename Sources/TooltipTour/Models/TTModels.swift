@@ -14,9 +14,15 @@ public struct TTTourCondition: Codable {
     public let rule: String   // "seen" | "completed"
 }
 
+public struct TTDateRange: Codable {
+    public let from: String?
+    public let to:   String?
+}
+
 public struct TTDisplayConditions: Codable {
     public let elementCondition:   TTElementCondition?
     public let priorTourCondition: TTTourCondition?
+    public let dateRange:          TTDateRange?
 }
 
 // MARK: - Tour config
