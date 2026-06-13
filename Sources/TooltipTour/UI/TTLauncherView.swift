@@ -317,9 +317,19 @@ final class TTLauncherState: ObservableObject {
                     isMinimised = true
                     pendingAutoOpen = true
                 } else if !hasReachedMaxShows(config) {
-                    incrementShowCount(config.id)
-                    try? await Task.sleep(nanoseconds: 300_000_000)  // 0.3s — just enough for the app to settle
-                    openWelcome()
+                    if !config.autoOpen {
+                        // Auto-open disabled — just show the FAB; the user taps to begin.
+                        isMinimised = true
+                    } else if config.welcomeMode == "button" {
+                        // Button-only mode: skip the welcome card entirely and start the tour.
+                        incrementShowCount(config.id)
+                        try? await Task.sleep(nanoseconds: 300_000_000)  // 0.3s — let the app settle
+                        startGuide()
+                    } else {
+                        incrementShowCount(config.id)
+                        try? await Task.sleep(nanoseconds: 300_000_000)  // 0.3s — let the app settle
+                        openWelcome()
+                    }
                 } else {
                     isMinimised = true
                 }
