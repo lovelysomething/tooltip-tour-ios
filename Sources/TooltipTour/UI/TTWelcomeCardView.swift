@@ -43,7 +43,7 @@ struct TTWelcomeCardView: View {
 
                 // CTA button
                 Button(action: onStart) {
-                    Text("Yes, show me around!")
+                    Text(config.welcomeCtaLabel ?? "Yes, show me around!")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundColor(btnText)
                         .frame(maxWidth: .infinity)
@@ -55,7 +55,7 @@ struct TTWelcomeCardView: View {
 
                 // Don't show again
                 Button(action: onDontShowAgain) {
-                    Text("Don't show again")
+                    Text(config.welcomeDismissLabel ?? "Don't show again")
                         .font(.system(size: 14))
                         .foregroundColor(Color(UIColor(hex: "9ca3b0") ?? .tertiaryLabel))
                 }

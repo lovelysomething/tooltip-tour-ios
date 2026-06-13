@@ -39,6 +39,9 @@ public struct TTConfig: Codable {
     public let startMinimized: Bool
     /// "full" (default) shows the welcome card popup; "button" starts the tour directly when the FAB is tapped.
     public let welcomeMode: String?
+    /// Welcome-card button labels (configurable in the dashboard).
+    public let welcomeCtaLabel: String?
+    public let welcomeDismissLabel: String?
     /// Maximum number of times to auto-show the welcome card per device. nil = infinite.
     public let maxShows: Int?
     public let steps: [TTStep]
