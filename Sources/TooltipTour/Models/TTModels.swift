@@ -63,6 +63,20 @@ public struct TTSplashCarousel: Codable {
         self.slides = slides; self.direction = direction
         self.bgColor = bgColor; self.textColor = textColor; self.maxShows = maxShows
     }
+
+    enum CodingKeys: String, CodingKey { case slides, direction, bgColor, textColor, maxShows }
+
+    // Custom decode so a missing `direction` (the API/dashboard never sends it —
+    // it's a client-side default) doesn't throw and cascade up to fail the whole
+    // TTConfig decode, which would silently hide any tour that has a carousel.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        slides    = try c.decodeIfPresent([TTCarouselSlide].self, forKey: .slides) ?? []
+        direction = try c.decodeIfPresent(String.self, forKey: .direction) ?? "horizontal"
+        bgColor   = try c.decodeIfPresent(String.self, forKey: .bgColor)
+        textColor = try c.decodeIfPresent(String.self, forKey: .textColor)
+        maxShows  = try c.decodeIfPresent(Int.self, forKey: .maxShows)
+    }
 }
 
 public struct TTCarouselSlide: Codable {
