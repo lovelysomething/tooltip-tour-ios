@@ -175,8 +175,9 @@ final class TTLauncherState: ObservableObject {
     private var isGlobal        = false
     /// Tour IDs the user has manually minimised this session — won't auto-open until they tap the circle.
     private var sessionMinimised: Set<String> = []
-    /// Prevents the carousel re-firing during the same app session (e.g. navigate away and back).
-    private var carouselShownThisSession = false
+    /// Tour IDs whose carousel has shown this session — keyed per tour so a
+    /// second tour's carousel still fires (a single flag blocked all but the first).
+    private var carouselsShownThisSession: Set<String> = []
     private var inspectorObserver: Any?
 
     init() {
@@ -298,11 +299,11 @@ final class TTLauncherState: ObservableObject {
             // ── Carousel check (fires before welcome card) ────────────────
             if let carousel = config.splashCarousel,
                !carousel.slides.isEmpty,
-               !carouselShownThisSession,
+               !carouselsShownThisSession.contains(config.id),
                !isDismissed(config.id),
                !hasReachedCarouselMaxShows(config) {
                 incrementCarouselShowCount(config.id)
-                carouselShownThisSession = true
+                carouselsShownThisSession.insert(config.id)
                 try? await Task.sleep(nanoseconds: 300_000_000)  // 0.3s settle
                 withAnimation(.easeOut(duration: 0.35)) { showCarousel = true }
                 TooltipTour.shared.trackCarousel(.carouselShown, walkthroughId: config.id)
@@ -404,11 +405,18 @@ final class TTLauncherState: ObservableObject {
             withAnimation(.easeInOut(duration: 0.5)) { isMinimised = true }
             return
         }
-        if !isDismissed(config.id) && !hasReachedMaxShows(config) {
+        if isDismissed(config.id) || hasReachedMaxShows(config) {
+            withAnimation(.easeInOut(duration: 0.5)) { isMinimised = true }
+        } else if !config.autoOpen {
+            // Auto-open disabled — show the FAB; user taps to begin.
+            withAnimation(.easeInOut(duration: 0.5)) { isMinimised = true }
+        } else if config.welcomeMode == "button" {
+            // Button-only mode: skip the welcome card, start the tour directly.
+            incrementShowCount(config.id)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.startGuide() }
+        } else {
             incrementShowCount(config.id)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { self.openWelcome() }
-        } else {
-            withAnimation(.easeInOut(duration: 0.5)) { isMinimised = true }
         }
     }
 
